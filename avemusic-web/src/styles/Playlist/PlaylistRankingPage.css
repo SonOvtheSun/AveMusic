@@ -1,0 +1,478 @@
+.playlist-ranking-shell {
+    min-height: 100vh;
+
+    background: #f5f6f8;
+}
+
+.playlist-ranking-page {
+    width: 1180px;
+
+    max-width:
+            calc(100% - 32px);
+
+    margin: 0 auto;
+
+    padding:
+            34px
+            0
+            72px;
+}
+
+.playlist-ranking-title {
+    margin-bottom: 24px;
+
+    display: flex;
+
+    align-items: flex-end;
+
+    justify-content: space-between;
+
+    gap: 20px;
+}
+
+.playlist-ranking-title h1 {
+    margin: 0;
+
+    color: #20242b;
+
+    font-size: 30px;
+
+    line-height: 1.2;
+}
+
+.playlist-ranking-title p {
+    margin:
+            8px
+            0
+            0;
+
+    color: #8a8f98;
+
+    font-size: 13px;
+}
+
+.playlist-ranking-title > span {
+    color: #999999;
+
+    font-size: 12px;
+}
+
+
+/* ============================================================
+   歌单网格
+   ============================================================ */
+
+.playlist-ranking-grid {
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            5,
+            minmax(0, 1fr)
+        );
+
+    gap:
+            28px
+            20px;
+}
+
+.playlist-ranking-card {
+    min-width: 0;
+
+    cursor: pointer;
+}
+
+.playlist-ranking-cover {
+    position: relative;
+
+    width: 100%;
+
+    aspect-ratio: 1 / 1;
+
+    overflow: hidden;
+
+    border-radius: 10px;
+
+    background:
+            linear-gradient(
+                    135deg,
+                    #d74848,
+                    #742626
+            );
+
+    box-shadow:
+            0 5px 16px
+            rgba(
+                    0,
+                    0,
+                    0,
+                    0.08
+            );
+
+    transition:
+            transform
+            160ms ease,
+            box-shadow
+            160ms ease;
+}
+
+.playlist-ranking-card:hover
+.playlist-ranking-cover {
+    transform:
+            translateY(-3px);
+
+    box-shadow:
+            0 10px 24px
+            rgba(
+                    0,
+                    0,
+                    0,
+                    0.14
+            );
+}
+
+.playlist-ranking-cover img {
+    width: 100%;
+    height: 100%;
+
+    display: block;
+
+    object-fit: cover;
+}
+
+.playlist-ranking-cover > span {
+    width: 100%;
+    height: 100%;
+
+    display: grid;
+
+    place-items: center;
+
+    color: #ffffff;
+
+    font-size: 42px;
+}
+
+
+/* ============================================================
+   排名角标
+   ============================================================ */
+
+.playlist-ranking-cover > strong {
+    position: absolute;
+
+    top: 9px;
+    left: 9px;
+
+    min-width: 34px;
+
+    height: 26px;
+
+    padding:
+            0
+            8px;
+
+    box-sizing: border-box;
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    border-radius: 13px;
+
+    color: #ffffff;
+
+    font-size: 12px;
+
+    font-weight: 700;
+
+    background:
+            rgba(
+                    0,
+                    0,
+                    0,
+                    0.58
+            );
+
+    backdrop-filter:
+            blur(4px);
+}
+
+.playlist-ranking-card:nth-child(1)
+.playlist-ranking-cover > strong {
+    background:
+            rgba(
+                    205,
+                    35,
+                    35,
+                    0.9
+            );
+}
+
+.playlist-ranking-card:nth-child(2)
+.playlist-ranking-cover > strong {
+    background:
+            rgba(
+                    213,
+                    105,
+                    32,
+                    0.9
+            );
+}
+
+.playlist-ranking-card:nth-child(3)
+.playlist-ranking-cover > strong {
+    background:
+            rgba(
+                    194,
+                    132,
+                    39,
+                    0.9
+            );
+}
+
+
+/* ============================================================
+   歌单标题
+   ============================================================ */
+
+.playlist-ranking-card h3 {
+    margin:
+            10px
+            0
+            0;
+
+    overflow: hidden;
+
+    color: #222222;
+
+    font-size: 14px;
+
+    font-weight: 500;
+
+    line-height: 21px;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
+}
+
+.playlist-ranking-card:hover h3 {
+    color: #c20c0c;
+}
+
+
+/* ============================================================
+   歌曲数量 / 收藏数量
+   ============================================================ */
+
+.playlist-ranking-meta {
+    margin-top: 5px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    gap: 8px;
+
+    color: #999999;
+
+    font-size: 11px;
+}
+
+.playlist-ranking-meta span {
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
+}
+
+.playlist-ranking-meta
+span:last-child {
+    flex: none;
+
+    color: #888888;
+}
+
+
+/* ============================================================
+   加载 / 错误 / 空状态
+   ============================================================ */
+
+.playlist-ranking-state {
+    min-height: 320px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    color: #888888;
+
+    font-size: 13px;
+}
+
+.playlist-ranking-error {
+    margin-bottom: 18px;
+
+    padding:
+            11px
+            13px;
+
+    border:
+            1px solid #efcaca;
+
+    border-radius: 7px;
+
+    color: #b42318;
+
+    font-size: 12px;
+
+    background: #fff4f4;
+}
+
+
+/* ============================================================
+   分页
+   ============================================================ */
+
+.playlist-ranking-pagination {
+    margin-top: 38px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    flex-wrap: wrap;
+
+    gap: 7px;
+}
+
+.playlist-ranking-pagination button {
+    min-width: 34px;
+
+    height: 34px;
+
+    padding:
+            0
+            10px;
+
+    border:
+            1px solid #dddddd;
+
+    border-radius: 6px;
+
+    color: #555555;
+
+    font-size: 12px;
+
+    background: #ffffff;
+
+    cursor: pointer;
+
+    transition:
+            border-color
+            120ms ease,
+            color
+            120ms ease,
+            background
+            120ms ease;
+}
+
+.playlist-ranking-pagination
+button:hover:not(:disabled) {
+    border-color: #c20c0c;
+
+    color: #c20c0c;
+}
+
+.playlist-ranking-pagination
+button.active {
+    border-color: #c20c0c;
+
+    color: #ffffff;
+
+    background: #c20c0c;
+}
+
+.playlist-ranking-pagination
+button:disabled {
+    cursor: not-allowed;
+
+    opacity: 0.42;
+}
+
+
+/* ============================================================
+   响应式
+   ============================================================ */
+
+@media (max-width: 1100px) {
+
+    .playlist-ranking-grid {
+        grid-template-columns:
+            repeat(
+                4,
+                minmax(0, 1fr)
+            );
+    }
+}
+
+@media (max-width: 820px) {
+
+    .playlist-ranking-grid {
+        grid-template-columns:
+            repeat(
+                3,
+                minmax(0, 1fr)
+            );
+    }
+}
+
+@media (max-width: 620px) {
+
+    .playlist-ranking-page {
+        max-width:
+                calc(100% - 20px);
+
+        padding-top: 22px;
+    }
+
+    .playlist-ranking-title h1 {
+        font-size: 25px;
+    }
+
+    .playlist-ranking-grid {
+        grid-template-columns:
+            repeat(
+                2,
+                minmax(0, 1fr)
+            );
+
+        gap:
+                22px
+                14px;
+    }
+
+    .playlist-ranking-pagination {
+        gap: 5px;
+    }
+
+    .playlist-ranking-pagination button {
+        min-width: 31px;
+
+        height: 31px;
+
+        padding:
+                0
+                8px;
+    }
+}

@@ -1,0 +1,282 @@
+.my-music-page-shell {
+    min-height: 100vh;
+    background: #f5f5f7;
+}
+
+.my-music-page {
+    width: 1180px;
+    max-width: calc(100% - 32px);
+    margin: 0 auto;
+    padding: 34px 0 70px;
+}
+
+.my-music-heading {
+    margin-bottom: 22px;
+}
+
+.my-music-heading h1 {
+    margin: 0;
+    color: #1d1d1f;
+    font-size: 30px;
+}
+
+.my-music-heading p {
+    margin: 7px 0 0;
+    color: #888888;
+    font-size: 13px;
+}
+
+.my-playlists-section {
+    padding: 26px;
+    border: 1px solid #e5e5e5;
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+.my-playlists-section
++ .my-playlists-section {
+    margin-top: 22px;
+}
+
+.my-playlists-section > header {
+    margin-bottom: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.my-playlists-section
+> header
+> div {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.my-playlists-section h2 {
+    margin: 0;
+    font-size: 21px;
+}
+
+.my-playlists-section
+> header span {
+    color: #999999;
+    font-size: 12px;
+}
+
+.create-playlist-button {
+    height: 38px;
+    padding: 0 16px;
+    border: 1px solid #c20c0c;
+    border-radius: 7px;
+    color: #ffffff;
+    background: #c20c0c;
+}
+
+.create-playlist-button:hover {
+    background: #a90a0a;
+}
+
+.my-playlist-grid {
+    display: grid;
+    grid-template-columns:
+        repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.my-playlist-card {
+    min-width: 0;
+    padding: 14px;
+    display: flex;
+    gap: 14px;
+    border: 1px solid #e7e7e7;
+    border-radius: 10px;
+    background: #ffffff;
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        transform 0.15s ease;
+}
+
+.my-playlist-card.clickable {
+    cursor: pointer;
+}
+
+.my-playlist-card:hover {
+    border-color: #d7b2b2;
+    transform: translateY(-1px);
+    box-shadow:
+        0 8px 22px
+        rgba(0, 0, 0, 0.06);
+}
+
+.my-playlist-card:focus-visible {
+    outline: 2px solid #c20c0c;
+    outline-offset: 2px;
+}
+
+.my-playlist-cover {
+    width: 82px;
+    height: 82px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 9px;
+    color: #ffffff;
+    font-size: 30px;
+    background:
+        linear-gradient(
+            135deg,
+            #d74848,
+            #6c2727
+        );
+}
+
+.my-playlist-cover img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+.my-playlist-info {
+    min-width: 0;
+    flex: 1;
+}
+
+.my-playlist-title-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.my-playlist-title-row h3 {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    color: #222222;
+    font-size: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.playlist-visibility {
+    flex: none;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+}
+
+.playlist-visibility.private {
+    color: #666666;
+    background: #eeeeee;
+}
+
+.playlist-visibility.public {
+    color: #0c7a43;
+    background: #e8f7ef;
+}
+
+.my-playlist-info > p {
+    height: 36px;
+    margin: 8px 0 9px;
+    overflow: hidden;
+    color: #777777;
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.my-playlist-info footer {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    color: #aaaaaa;
+    font-size: 10px;
+}
+
+.my-music-loading,
+.my-music-empty {
+    min-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #888888;
+}
+
+.my-music-empty {
+    flex-direction: column;
+    gap: 8px;
+}
+
+.my-music-empty.compact {
+    min-height: 170px;
+}
+
+.my-music-empty-icon {
+    width: 52px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 5px;
+    border-radius: 50%;
+    color: #c20c0c;
+    font-size: 26px;
+    background: #fff0f0;
+}
+
+.my-music-empty strong {
+    color: #333333;
+    font-size: 15px;
+}
+
+.my-music-empty span {
+    max-width: 520px;
+    color: #999999;
+    font-size: 12px;
+    text-align: center;
+    line-height: 1.6;
+}
+
+.my-music-error {
+    margin-bottom: 14px;
+    padding: 10px 12px;
+    border: 1px solid #f0c4c4;
+    border-radius: 7px;
+    color: #b42318;
+    font-size: 12px;
+    background: #fff5f5;
+}
+
+@media (max-width: 900px) {
+    .my-playlist-grid {
+        grid-template-columns:
+            repeat(
+                2,
+                minmax(0, 1fr)
+            );
+    }
+}
+
+@media (max-width: 620px) {
+    .my-music-page {
+        max-width:
+            calc(100% - 20px);
+    }
+
+    .my-playlists-section {
+        padding: 18px;
+    }
+
+    .my-playlist-grid {
+        grid-template-columns:
+            1fr;
+    }
+
+    .my-playlists-section
+    > header {
+        align-items:
+            flex-start;
+    }
+}

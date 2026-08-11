@@ -1,0 +1,746 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    color: #202026;
+    background: #f5f5f7;
+    font-family:
+        "PingFang SC",
+        "Microsoft YaHei",
+        sans-serif;
+}
+
+button,
+input {
+    font: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+.home-page {
+    min-height: 100vh;
+}
+
+.home-main {
+    width: 1100px;
+    max-width: calc(100% - 32px);
+    margin: 0 auto;
+    padding-bottom: 40px;
+}
+
+.home-banner {
+    --banner-accent: #c20c0c;
+
+    position: relative;
+    height: 320px;
+    display: flex;
+    align-items: center;
+    padding: 0 86px;
+    overflow: hidden;
+    background-position: center;
+    background-size: cover;
+}
+
+.home-banner::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    box-shadow:
+        inset 0 0 120px
+        rgba(0, 0, 0, 0.28);
+}
+
+.banner-content {
+    position: relative;
+    z-index: 1;
+    max-width: 500px;
+    color: #ffffff;
+}
+
+.banner-badge {
+    display: inline-block;
+    margin-bottom: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    background:
+        var(--banner-accent, #c20c0c);
+}
+
+.banner-content h1 {
+    margin: 0 0 12px;
+    font-size: 42px;
+    line-height: 1.18;
+}
+
+.banner-content p {
+    margin: 0;
+    color:
+        rgba(255, 255, 255, 0.88);
+    font-size: 16px;
+    line-height: 1.75;
+}
+
+.banner-actions {
+    margin-top: 24px;
+    display: flex;
+    gap: 12px;
+}
+
+.banner-primary,
+.banner-secondary {
+    height: 40px;
+    padding: 0 18px;
+    border-radius: 20px;
+}
+
+.banner-primary {
+    border: 0;
+    color: #ffffff;
+    background:
+        var(--banner-accent, #c20c0c);
+}
+
+.banner-secondary {
+    border: 1px solid
+        rgba(255, 255, 255, 0.24);
+    color: #ffffff;
+    background:
+        rgba(255, 255, 255, 0.14);
+}
+
+.banner-arrow {
+    position: absolute;
+    top: 50%;
+    z-index: 2;
+    width: 42px;
+    height: 42px;
+    margin-top: -21px;
+    border: 0;
+    border-radius: 50%;
+    color: #ffffff;
+    font-size: 32px;
+    background:
+        rgba(0, 0, 0, 0.24);
+}
+
+.banner-arrow.left {
+    left: 22px;
+}
+
+.banner-arrow.right {
+    right: 22px;
+}
+
+.banner-dots {
+    margin-top: 22px;
+    display: flex;
+    gap: 8px;
+}
+
+.banner-dot {
+    width: 10px;
+    height: 10px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background:
+        rgba(255, 255, 255, 0.45);
+}
+
+.banner-dot.active {
+    background: #ffffff;
+}
+
+.home-content {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 24px;
+    padding: 24px;
+    border: 1px solid #d3d3d3;
+    border-top: 0;
+    background: #ffffff;
+}
+
+.home-state {
+    min-height: 260px;
+    display: grid;
+    place-items: center;
+    color: #666666;
+    border: 1px dashed #dddddd;
+    background: #fafafa;
+}
+
+.home-state.error {
+    color: #b42318;
+    background: #fff5f5;
+}
+
+.home-section + .home-section {
+    margin-top: 36px;
+}
+
+.section-header {
+    margin-bottom: 18px;
+    padding-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2px solid #c10d0c;
+}
+
+.section-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #c10d0c;
+}
+
+.section-heading h2 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 500;
+}
+
+.section-more {
+    padding: 0;
+    border: 0;
+    color: #666666;
+    font-size: 13px;
+    background: transparent;
+}
+
+.song-grid {
+    display: grid;
+    grid-template-columns:
+        repeat(4, minmax(0, 1fr));
+    gap: 22px 18px;
+}
+
+.song-cover-box {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    border-radius: 8px;
+    background: #eeeeee;
+}
+
+.song-cover {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+.song-cover-mask {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    border: 0;
+    padding: 10px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    color: #ffffff;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    background:
+        linear-gradient(
+            180deg,
+            transparent 35%,
+            rgba(0, 0, 0, 0.5)
+        );
+}
+
+.song-cover-mask:disabled {
+    cursor: default;
+}
+
+.song-cover-box:hover
+.song-cover-mask,
+.song-card.playing
+.song-cover-mask {
+    opacity: 1;
+}
+
+.song-card.playing
+.song-title {
+    color: #c20c0c;
+}
+
+.song-title {
+    margin: 10px 0 0;
+    color: #111111;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.song-artist,
+.song-count {
+    margin: 4px 0 0;
+    color: #666666;
+    font-size: 12px;
+}
+
+.artist-grid {
+    display: grid;
+    grid-template-columns:
+        repeat(3, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.artist-card {
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border: 1px solid #eeeeee;
+    border-radius: 10px;
+    background: #fafafa;
+}
+
+.artist-avatar {
+    width: 68px;
+    height: 68px;
+    flex: none;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.artist-name {
+    margin: 0;
+    font-size: 15px;
+}
+
+.artist-tag {
+    margin: 6px 0 0;
+    color: #666666;
+    font-size: 12px;
+}
+
+.artist-followers {
+    margin: 5px 0 0;
+    color: #999999;
+    font-size: 12px;
+}
+
+.home-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.login-card {
+    overflow: hidden;
+    border: 1px solid #dddddd;
+    background:
+        linear-gradient(
+            180deg,
+            #fdfdfd,
+            #f4f4f4
+        );
+}
+
+.login-card-cover {
+    height: 96px;
+    background:
+        linear-gradient(
+            135deg,
+            #202020,
+            #545454
+        );
+}
+
+.login-card-body {
+    padding: 18px 16px 16px;
+}
+
+.login-card-body h3 {
+    margin: 0 0 10px;
+    font-size: 18px;
+}
+
+.login-card-body p {
+    margin: 0;
+    color: #666666;
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.login-card-button {
+    width: 100%;
+    height: 38px;
+    margin-top: 16px;
+    border: 0;
+    border-radius: 19px;
+    color: #ffffff;
+    background: #d81e06;
+}
+
+.user-card-loading {
+    min-height: 190px;
+    display: grid;
+    place-items: center;
+    color: #888888;
+    font-size: 13px;
+}
+
+.user-card {
+    padding: 18px;
+    border: 1px solid #dddddd;
+    background:
+        linear-gradient(
+            145deg,
+            #ffffff,
+            #f7f7f7
+        );
+}
+
+.user-card-profile {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.user-card-avatar {
+    width: 56px;
+    height: 56px;
+    flex: none;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.user-card-avatar.fallback {
+    display: grid;
+    place-items: center;
+    color: #ffffff;
+    font-size: 22px;
+    font-weight: 700;
+    background:
+        linear-gradient(
+            135deg,
+            #c20c0c,
+            #f05a47
+        );
+}
+
+.user-card-name h3 {
+    margin: 0;
+    font-size: 17px;
+}
+
+.user-card-name span {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    color: #3c763d;
+    font-size: 11px;
+    background: #edf8ed;
+}
+
+.user-card-details {
+    margin-top: 16px;
+    padding: 10px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-top: 1px solid #eeeeee;
+    border-bottom: 1px solid #eeeeee;
+}
+
+.user-card-details span {
+    color: #999999;
+    font-size: 11px;
+}
+
+.user-card-details strong {
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+}
+
+.user-card-actions {
+    margin-top: 14px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.user-card-actions button {
+    height: 34px;
+    border: 1px solid #dddddd;
+    border-radius: 6px;
+    color: #444444;
+    background: #ffffff;
+}
+
+.user-card-actions button:hover {
+    background: #f3f3f3;
+}
+
+.user-card-actions button.danger {
+    color: #c20c0c;
+}
+
+.side-panel {
+    padding: 16px;
+    border: 1px solid #dddddd;
+    background: #ffffff;
+}
+
+.side-panel-title {
+    margin: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e5e5e5;
+    font-size: 15px;
+}
+
+.side-song-list,
+.side-artist-list {
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.side-song-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.side-song-item
++ .side-song-item {
+    margin-top: 12px;
+}
+
+.side-song-item span {
+    font-size: 13px;
+}
+
+.side-song-item small {
+    color: #666666;
+}
+
+.side-artist-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.side-artist-item
++ .side-artist-item {
+    margin-top: 14px;
+}
+
+.side-artist-item img {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.side-artist-item div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.side-artist-item span {
+    font-size: 13px;
+}
+
+.side-artist-item small {
+    color: #666666;
+}
+
+@media (max-width: 1100px) {
+    .song-grid {
+        grid-template-columns:
+            repeat(3, minmax(0, 1fr));
+    }
+
+    .artist-grid {
+        grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 900px) {
+    .home-content {
+        grid-template-columns: 1fr;
+    }
+
+    .song-grid {
+        grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+    }
+
+    .home-banner {
+        height: 280px;
+        padding: 0 60px;
+    }
+}
+
+@media (max-width: 640px) {
+    .home-main {
+        max-width: calc(100% - 20px);
+    }
+
+    .home-content {
+        padding: 16px;
+    }
+
+    .home-banner {
+        height: 240px;
+        padding: 0 46px;
+    }
+
+    .banner-content h1 {
+        font-size: 30px;
+    }
+
+    .song-grid,
+    .artist-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+
+.artist-card.clickable {
+    cursor: pointer;
+    transition:
+        transform 0.18s ease,
+        box-shadow 0.18s ease,
+        border-color 0.18s ease;
+}
+
+.artist-card.clickable:hover,
+.artist-card.clickable:focus-visible {
+    border-color: #d9b3b3;
+    outline: none;
+    transform: translateY(-2px);
+    box-shadow:
+        0 8px 22px
+        rgba(0, 0, 0, 0.08);
+}
+
+
+.side-artist-item.clickable {
+    cursor: pointer;
+}
+
+.side-artist-item.clickable:hover,
+.side-artist-item.clickable:focus-visible {
+    outline: none;
+    background: #f6f6f6;
+}
+
+
+/* ==================== V10：歌曲与音乐人链接 ==================== */
+
+.song-cover-mask {
+    gap: 6px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.song-cover-mask svg {
+    flex: none;
+}
+
+.song-title-link,
+.song-artist-link,
+.side-song-title-link {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    text-align: left;
+    color: inherit;
+    font: inherit;
+    background: transparent;
+}
+
+.song-title-link {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.song-title-link:hover:not(:disabled) {
+    color: #c20c0c;
+    text-decoration: underline;
+}
+
+.song-title-link:disabled,
+.side-song-title-link:disabled {
+    cursor: default;
+}
+
+.song-artist {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.song-artist-link-group {
+    display: inline-flex;
+    align-items: center;
+}
+
+.song-artist-link {
+    color: #666666;
+    cursor: pointer;
+}
+
+.song-artist-link:hover {
+    color: #c20c0c;
+    text-decoration: underline;
+}
+
+.song-artist-separator {
+    color: #999999;
+    white-space: pre;
+}
+
+.side-song-title-link {
+    width: fit-content;
+    max-width: 100%;
+    overflow: hidden;
+    color: #222222;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.side-song-title-link:hover:not(:disabled) {
+    color: #c20c0c;
+    text-decoration: underline;
+}
+
+.side-song-artist-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    color: #666666;
+}
+
+.side-song-artist-links .song-artist-link {
+    font-size: inherit;
+}

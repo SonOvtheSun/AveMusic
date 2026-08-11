@@ -1,0 +1,64 @@
+.player-collect-button {
+    height: 30px;
+    padding: 0 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1px solid #4c4c4c;
+    border-radius: 4px;
+    color: #cfcfcf;
+    background: #242424;
+}
+
+.player-collect-button:hover {
+    border-color: #727272;
+    color: #ffffff;
+    background: #333333;
+}
+
+.player-collect-icon {
+    color: #ef6b6b;
+    font-size: 17px;
+    line-height: 1;
+}
+
+
+.player-artist-links {
+    min-width: 0;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    color: #999999;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.player-artist-link-group {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.player-artist-separator {
+    color: #777777;
+    white-space: pre;
+}
+
+.player-artist-link {
+    max-width: 120px;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: transparent;
+    cursor: pointer;
+}
+
+.player-artist-link:hover {
+    color: #ffffff;
+    text-decoration: underline;
+}

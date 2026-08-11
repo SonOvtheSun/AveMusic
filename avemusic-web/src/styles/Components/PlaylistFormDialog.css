@@ -1,0 +1,223 @@
+.playlist-form-layer {
+    position: fixed;
+    z-index: 4400;
+    inset: 0;
+    padding: 20px;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+}
+
+.playlist-form-mask {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background:
+        rgba(0, 0, 0, 0.48);
+}
+
+.playlist-form-dialog {
+    position: relative;
+    z-index: 1;
+    width: 500px;
+    max-width: 100%;
+    overflow: hidden;
+    border-radius: 12px;
+    color: #222222;
+    background: #ffffff;
+    box-shadow:
+        0 22px 64px
+        rgba(0, 0, 0, 0.28);
+}
+
+.playlist-form-dialog > header {
+    height: 70px;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom:
+        1px solid #eeeeee;
+}
+
+.playlist-form-dialog > header h2 {
+    margin: 0;
+    font-size: 19px;
+}
+
+.playlist-form-dialog > header p {
+    margin: 5px 0 0;
+    color: #999999;
+    font-size: 11px;
+}
+
+.playlist-form-dialog > header button {
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 50%;
+    color: #666666;
+    font-size: 22px;
+    background: #f5f5f5;
+}
+
+.playlist-form-dialog form {
+    padding: 20px;
+}
+
+.playlist-cover-editor {
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.playlist-cover-preview {
+    width: 92px;
+    height: 92px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border: 1px solid #e5e5e5;
+    border-radius: 9px;
+    color: #ffffff;
+    font-size: 32px;
+    background:
+        linear-gradient(
+            135deg,
+            #d74848,
+            #6c2727
+        );
+}
+
+.playlist-cover-preview img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+.playlist-cover-editor strong {
+    display: block;
+    font-size: 13px;
+}
+
+.playlist-cover-editor p {
+    margin: 5px 0 9px;
+    color: #999999;
+    font-size: 11px;
+}
+
+.playlist-cover-select-button {
+    height: 32px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid #dddddd;
+    border-radius: 6px;
+    color: #444444;
+    font-size: 12px;
+    cursor: pointer;
+    background: #ffffff;
+}
+
+.playlist-cover-select-button:hover {
+    border-color: #c20c0c;
+    color: #c20c0c;
+}
+
+.playlist-cover-select-button input {
+    display: none;
+}
+
+.playlist-form-field {
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.playlist-form-field > span,
+.playlist-visibility-field legend {
+    color: #333333;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.playlist-form-field b {
+    margin-left: 3px;
+    color: #c20c0c;
+}
+
+.playlist-form-field input,
+.playlist-form-field textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 11px;
+    border: 1px solid #dddddd;
+    border-radius: 7px;
+    outline: none;
+    font: inherit;
+}
+
+.playlist-form-field input:focus,
+.playlist-form-field textarea:focus {
+    border-color: #c20c0c;
+}
+
+.playlist-form-field textarea {
+    resize: vertical;
+}
+
+.playlist-visibility-field {
+    margin: 0 0 16px;
+    padding: 0;
+    display: flex;
+    gap: 22px;
+    border: 0;
+}
+
+.playlist-visibility-field legend {
+    margin-bottom: 8px;
+}
+
+.playlist-visibility-field label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #555555;
+    font-size: 12px;
+}
+
+.playlist-form-error {
+    margin-bottom: 14px;
+    padding: 9px 10px;
+    border-radius: 6px;
+    color: #b42318;
+    font-size: 12px;
+    background: #fff0f0;
+}
+
+.playlist-form-dialog form > footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 9px;
+}
+
+.playlist-form-dialog footer button {
+    min-width: 86px;
+    height: 36px;
+    border-radius: 6px;
+}
+
+.playlist-form-dialog footer .secondary {
+    border: 1px solid #dddddd;
+    background: #ffffff;
+}
+
+.playlist-form-dialog footer .primary {
+    border: 1px solid #c20c0c;
+    color: #ffffff;
+    background: #c20c0c;
+}

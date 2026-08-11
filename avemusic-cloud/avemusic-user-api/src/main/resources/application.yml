@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: avemusic-music-provider
+
+  main:
+    web-application-type: none
+
+  datasource:
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/avemusic_music?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD}
+
+    hikari:
+      minimum-idle: 2
+      maximum-pool-size: 10
+      connection-timeout: 3000
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    cache-enabled: false
+
+mini-rpc:
+  enabled: true
+  application-name: avemusic-music-provider
+
+  provider:
+    enabled: true
+    host: 127.0.0.1
+    port: 20882
+    group: music
+    version: 1.0.0
+
+  consumer:
+    enabled: false
+
+  transport:
+    name: netty
+    options:
+      "[server.tls.mode]": "disabled"

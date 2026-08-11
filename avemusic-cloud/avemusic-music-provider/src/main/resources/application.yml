@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: avemusic-music-provider
+
+  datasource:
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/avemusic_music?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD}
+
+    hikari:
+      minimum-idle: 2
+      maximum-pool-size: 10
+      connection-timeout: 3000
+      validation-timeout: 1000
+
+  sql:
+    init:
+      mode: always
+      encoding: UTF-8
+
+mybatis-plus:
+  # 保留自定义 XML，用于歌曲详情、首页聚合等复杂查询
+  mapper-locations: classpath*:/mapper/**/*.xml
+
+  configuration:
+    # artist_id 自动映射为 artistId
+    map-underscore-to-camel-case: true
+
+    # 暂时关闭 MyBatis 二级缓存
+    cache-enabled: false
+
+mini-rpc:
+  enabled: true
+  application-name: ${spring.application.name}
+
+  provider:
+    enabled: true
+    host: 127.0.0.1
+    port: 20882
+    group: music
+    version: 1.0.0
+
+  consumer:
+    enabled: false
+
+  transport:
+    name: netty
+    options:
+      "[server.tls.mode]": "mtls"
+      "[server.tls.cert-chain]": "${MINIRPC_MUSIC_CERT:D:/AveMusic/certs/music-provider.crt}"
+      "[server.tls.private-key]": "${MINIRPC_MUSIC_KEY:D:/AveMusic/certs/music-provider-key.pem}"
+      "[server.tls.trust-cert]": "${MINIRPC_GATEWAY_CA:D:/AveMusic/certs/gateway-client-ca.crt}"
+      "[server.tls.handshake-timeout-millis]": "10000"
+      "[server.tls.protocols]": "TLSv1.3,TLSv1.2"

@@ -1,0 +1,61 @@
+spring:
+  application:
+    name: avemusic-user-provider
+
+  main:
+    web-application-type: none
+
+  datasource:
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/avemusic_user?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD}
+
+    hikari:
+      minimum-idle: 2
+      maximum-pool-size: 10
+      connection-timeout: 3000
+
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6380
+      password: ${AVEMUSIC_REDIS_PASSWORD}
+      database: 1
+      timeout: 2s
+      connect-timeout: 2s
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    cache-enabled: false
+
+avemusic:
+  sms:
+    # 开发阶段验证码输出到 Provider 控制台
+    mock: true
+
+  identity:
+    crypto:
+      aes-key-base64: ${AVEMUSIC_IDENTITY_AES_KEY}
+      hmac-key-base64: ${AVEMUSIC_IDENTITY_HMAC_KEY}
+      key-version: 1
+
+mini-rpc:
+  enabled: true
+  application-name: avemusic-user-provider
+
+  provider:
+    enabled: true
+    host: 127.0.0.1
+    port: 20881
+    group: user
+    version: 1.0.0
+
+  consumer:
+    enabled: false
+
+  transport:
+    name: netty
+    options:
+      # 当前还没有准备证书，先使用明文调通业务
+      "[server.tls.mode]": "disabled"

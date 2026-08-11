@@ -1,0 +1,62 @@
+server:
+  port: 8080
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+
+spring:
+  application:
+    name: avemusic-gateway
+
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6380
+      password: ${AVEMUSIC_REDIS_PASSWORD}
+      database: 0
+      timeout: 2s
+      connect-timeout: 2s
+
+avemusic:
+  security:
+    issuer: avemusic-gateway
+
+    # 不要把真实密钥直接写进 application.yml
+    secret-base64: ${AVEMUSIC_JWT_SECRET_BASE64}
+
+    access-token-ttl: 15m
+    idle-timeout: 7d
+    absolute-timeout: 30d
+
+    allowed-origins:
+      - http://localhost:5173
+      - http://127.0.0.1:5173
+
+  file-service:
+    public-upload-base-url: ${AVEMUSIC_FILE_PUBLIC_UPLOAD_BASE_URL:http://127.0.0.1:8090}
+
+mini-rpc:
+  enabled: true
+  application-name: avemusic-gateway
+
+  provider:
+    enabled: false
+
+  consumer:
+    enabled: true
+    host: 127.0.0.1
+    port: 20881
+    group: user
+    version: 1.0.0
+    serializer: JSON
+    compressor: NONE
+    timeout: 3s
+
+  observability:
+    enabled: false
+
+  transport:
+    name: netty
+    options:
+      "[client.tls.mode]": "disabled"
