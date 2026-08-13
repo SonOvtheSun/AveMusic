@@ -247,8 +247,13 @@ export default function LoginPage() {
         <main className="auth-page">
             <section className="auth-brand">
                 <div className="auth-brand-content">
+                    <div className="auth-brand-logo">
+                        <span className="auth-brand-logo-mark">A</span>
+                        <strong>AveMusic</strong>
+                    </div>
+
                     <span className="auth-brand-label">
-                        AVEMUSIC
+                        MUSIC FOR EVERY MOMENT
                     </span>
 
                     <h1>
@@ -276,6 +281,14 @@ export default function LoginPage() {
             </section>
 
             <section className="auth-panel">
+                <button
+                    type="button"
+                    className="auth-back-home"
+                    onClick={() => navigate("/")}
+                >
+                    ← 返回首页
+                </button>
+
                 <div className="auth-card">
                     <header className="auth-header">
                         <div className="auth-logo">

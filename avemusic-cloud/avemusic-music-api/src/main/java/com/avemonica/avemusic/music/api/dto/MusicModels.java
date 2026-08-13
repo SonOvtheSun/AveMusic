@@ -35,7 +35,7 @@ public final class MusicModels {
     public record ArtistCard(
             String id,
             String name,
-            String translatedName,
+            List<String> translatedNames,
             String avatarUrl,
             String countryRegion,
             long followerCount

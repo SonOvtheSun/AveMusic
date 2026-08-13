@@ -140,11 +140,17 @@ public class ArtistController {
                 musicService.createArtist(
                         new CreateArtistRequest(
                                 body.name(),
-                                body.translatedName(),
+
+                                body.translatedNames(),
+
                                 body.countryRegion(),
+
                                 body.style(),
+
                                 body.introduction(),
+
                                 body.avatarUrl(),
+
                                 actorResolver.resolve(
                                         authentication
                                 )
@@ -169,13 +175,22 @@ public class ArtistController {
                 musicService.updateArtist(
                         new UpdateArtistRequest(
                                 id,
+
                                 body.name(),
-                                body.translatedName(),
+
+                                body.translatedNames(),
+
                                 body.countryRegion(),
+
                                 body.style(),
+
                                 body.introduction(),
+
                                 body.avatarUrl(),
-                                actorResolver.resolve(authentication)
+
+                                actorResolver.resolve(
+                                        authentication
+                                )
                         )
                 )
         );
@@ -295,24 +310,52 @@ public class ArtistController {
     }
 
     public record CreateArtistBody(
-            @NotBlank(message = "音乐人名称不能为空")
-            @Size(max = 128, message = "音乐人名称不能超过128个字符")
+            @NotBlank(
+                    message = "音乐人名称不能为空"
+            )
+            @Size(
+                    max = 128,
+                    message = "音乐人名称不能超过128个字符"
+            )
             String name,
 
-            @Size(max = 128, message = "译名不能超过128个字符")
-            String translatedName,
+            @Size(
+                    max = 10,
+                    message = "音乐人最多添加10个译名"
+            )
+            List<
+                    @Size(
+                            max = 128,
+                            message = "单个译名不能超过128个字符"
+                    )
+                            String
+                    > translatedNames,
 
-            @NotBlank(message = "国家或地区不能为空")
-            @Size(max = 64, message = "国家或地区不能超过64个字符")
+            @NotBlank(
+                    message = "国家或地区不能为空"
+            )
+            @Size(
+                    max = 64,
+                    message = "国家或地区不能超过64个字符"
+            )
             String countryRegion,
 
-            @Size(max = 64, message = "音乐风格不能超过64个字符")
+            @Size(
+                    max = 64,
+                    message = "音乐风格不能超过64个字符"
+            )
             String style,
 
-            @Size(max = 1000, message = "音乐人简介不能超过1000个字符")
+            @Size(
+                    max = 1000,
+                    message = "音乐人简介不能超过1000个字符"
+            )
             String introduction,
 
-            @Size(max = 512, message = "头像URL过长")
+            @Size(
+                    max = 512,
+                    message = "头像URL过长"
+            )
             String avatarUrl
     ) {
     }

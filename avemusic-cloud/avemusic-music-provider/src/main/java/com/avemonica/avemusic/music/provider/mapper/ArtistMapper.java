@@ -14,7 +14,7 @@ public interface ArtistMapper extends BaseMapper<ArtistDO> {
             SELECT
                 CAST(id AS CHAR) AS artistId,
                 name AS artistName,
-                translated_name AS translatedName,
+                CAST(translated_name AS CHAR) AS translatedNames,
                 avatar_url AS avatarUrl,
                 country_region AS countryRegion,
                 follower_count AS followerCount
@@ -33,7 +33,7 @@ public interface ArtistMapper extends BaseMapper<ArtistDO> {
             SELECT
                 CAST(artist.id AS CHAR) AS artistId,
                 artist.name AS artistName,
-                artist.translated_name AS translatedName,
+                CAST(artist.translated_name AS CHAR) AS translatedNames,
                 CAST(artist.owner_user_id AS CHAR) AS ownerUserId,
                 artist.country_region AS countryRegion,
                 artist.style AS style,
@@ -61,7 +61,7 @@ public interface ArtistMapper extends BaseMapper<ArtistDO> {
             GROUP BY
                 artist.id,
                 artist.name,
-                artist.translated_name,
+                CAST(artist.translated_name AS CHAR),
                 artist.owner_user_id,
                 artist.country_region,
                 artist.style,
@@ -80,31 +80,83 @@ public interface ArtistMapper extends BaseMapper<ArtistDO> {
     );
 
     @Select("""
-            SELECT
-                CAST(id AS CHAR) AS artistId,
-                name AS artistName,
-                translated_name AS translatedName,
-                avatar_url AS avatarUrl,
-                country_region AS countryRegion,
-                audit_status AS auditStatus
-            FROM singer_tb
-            WHERE audit_status IN ('APPROVED', 'PENDING')
-              AND (
-                    name LIKE CONCAT('%', #{keyword}, '%')
-                    OR translated_name LIKE CONCAT('%', #{keyword}, '%')
+        SELECT
+            CAST(
+                artist.id AS CHAR
+            ) AS artistId,
+
+            artist.name AS artistName,
+
+            CAST(
+                artist.translated_name AS CHAR
+            ) AS translatedNames,
+
+            artist.avatar_url AS avatarUrl,
+
+            artist.country_region AS countryRegion,
+
+            artist.audit_status AS auditStatus
+
+        FROM singer_tb artist
+
+        WHERE artist.audit_status
+              IN ('APPROVED', 'PENDING')
+
+          AND (
+              artist.name LIKE
+                  CONCAT(
+                      '%',
+                      #{keyword},
+                      '%'
+                  )
+
+              OR EXISTS (
+                  SELECT 1
+
+                  FROM JSON_TABLE(
+                      COALESCE(
+                          artist.translated_name,
+                          JSON_ARRAY()
+                      ),
+
+                      '$[*]'
+
+                      COLUMNS(
+                          alias_name
+                          VARCHAR(128)
+                          PATH '$'
+                      )
+                  ) alias_table
+
+                  WHERE
+                      alias_table.alias_name
+                      LIKE CONCAT(
+                          '%',
+                          #{keyword},
+                          '%'
+                      )
               )
-            ORDER BY
-                CASE audit_status
-                    WHEN 'APPROVED' THEN 0
-                    ELSE 1
-                END,
-                follower_count DESC,
-                id DESC
-            LIMIT #{limit}
-            """)
-    List<Map<String, Object>> searchForSong(
-            @Param("keyword") String keyword,
-            @Param("limit") int limit
+          )
+
+        ORDER BY
+            CASE artist.audit_status
+                WHEN 'APPROVED'
+                    THEN 0
+                ELSE 1
+            END,
+
+            artist.follower_count DESC,
+            artist.id DESC
+
+        LIMIT #{limit}
+        """)
+    List<Map<String, Object>>
+    searchForSong(
+            @Param("keyword")
+            String keyword,
+
+            @Param("limit")
+            int limit
     );
 
     @Select("""
@@ -133,7 +185,7 @@ public interface ArtistMapper extends BaseMapper<ArtistDO> {
             SELECT
                 CAST(artist.id AS CHAR) AS artistId,
                 artist.name AS artistName,
-                artist.translated_name AS translatedName,
+                CAST(artist.translated_name AS CHAR) AS translatedNames,
                 CAST(artist.owner_user_id AS CHAR) AS ownerUserId,
                 artist.avatar_url AS avatarUrl,
                 artist.country_region AS countryRegion,

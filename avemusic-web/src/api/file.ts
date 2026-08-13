@@ -36,9 +36,7 @@ export async function uploadFile(
     ) => void,
 ): Promise<UploadedFile> {
     const ticketResponse =
-        await http.post<
-            ApiResult<UploadTicket>
-        >(
+        await http.post<ApiResult<UploadTicket>>(
             "/files/upload-ticket",
             {
                 category,

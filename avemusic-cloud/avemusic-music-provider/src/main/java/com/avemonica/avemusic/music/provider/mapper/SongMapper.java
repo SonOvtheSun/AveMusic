@@ -477,4 +477,55 @@ public interface SongMapper
             Long songId
     );
 
+    @Select("""
+        SELECT
+            song.name AS songName,
+
+            COALESCE(
+                (
+                    SELECT GROUP_CONCAT(
+                        DISTINCT artist.name
+                        ORDER BY artist.name
+                        SEPARATOR ' / '
+                    )
+
+                    FROM song_artist_tb relation
+
+                    INNER JOIN singer_tb artist
+                        ON artist.id =
+                           relation.artist_id
+
+                    WHERE relation.song_id =
+                          song.id
+                ),
+                ''
+            ) AS artistName,
+
+            album.name AS albumName,
+
+            song.duration_seconds
+                AS durationSeconds
+
+        FROM song_tb song
+
+        LEFT JOIN album_tb album
+            ON album.id =
+               song.album_id
+
+        WHERE song.id =
+              #{songId}
+
+          AND song.audit_status =
+              'APPROVED'
+
+          AND song.status = 1
+
+        LIMIT 1
+        """)
+    Map<String, Object>
+    selectLyricsMeta(
+            @Param("songId")
+            Long songId
+    );
+
 }

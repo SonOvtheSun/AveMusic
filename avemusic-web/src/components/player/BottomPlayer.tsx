@@ -8,9 +8,12 @@ import { useAuth } from "../../context/useAuth";
 
 import "../../styles/components/BottomPlayer.css";
 import "../../styles/components/BottomPlayer.playlist.css";
+import LyricsPanel
+    from "./LyricsPanel";
 
 const DEFAULT_COVER =
     "https://images.unsplash.com/photo-1494232410401-ad00d5433cfa?auto=format&fit=crop&w=300&q=80";
+
 
 function formatTime(
     seconds: number,
@@ -60,6 +63,11 @@ export default function BottomPlayer() {
     const {
         user,
     } = useAuth();
+
+    const [
+        lyricsOpen,
+        setLyricsOpen,
+    ] = useState(false);
 
     const [
         collectDialogOpen,
@@ -279,6 +287,25 @@ export default function BottomPlayer() {
                     <div className="player-right-control">
                         <button
                             type="button"
+                            className={
+                                lyricsOpen
+                                    ? "player-lyrics-button active"
+                                    : "player-lyrics-button"
+                            }
+                            aria-label="歌词"
+                            title="歌词"
+                            onClick={() =>
+                                setLyricsOpen(
+                                    (current) =>
+                                        !current,
+                                )
+                            }
+                        >
+                            词
+                        </button>
+
+                        <button
+                            type="button"
                             className="player-collect-button"
                             aria-label="收藏到歌单"
                             title="收藏到歌单"
@@ -300,7 +327,7 @@ export default function BottomPlayer() {
                                 ♡
                             </span>
 
-                            收藏
+
                         </button>
 
                         <span
@@ -419,6 +446,15 @@ export default function BottomPlayer() {
                     setCollectDialogOpen(
                         false,
                     )
+                }
+            />
+
+            <LyricsPanel
+                open={lyricsOpen}
+                songId={currentSong.id}
+                songName={currentSong.name}
+                onClose={() =>
+                    setLyricsOpen(false)
                 }
             />
         </>

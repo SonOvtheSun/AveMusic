@@ -335,9 +335,11 @@ export default function ArtistPage() {
                                                 {artist.name}
                                             </h1>
 
-                                            {artist.translatedName && (
+                                            {(artist.translatedNames ?? [])
+                                                .length > 0 && (
                                                 <p>
-                                                    {artist.translatedName}
+                                                    {(artist.translatedNames ?? [])
+                                                        .join(" / ")}
                                                 </p>
                                             )}
                                         </div>

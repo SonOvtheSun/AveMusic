@@ -1,0 +1,131 @@
+.artist-alias-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.artist-alias-header > div {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.artist-alias-header > div > span {
+    color: #333333;
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.artist-alias-header small {
+    color: #999999;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.55;
+}
+
+.artist-alias-add-button {
+    flex: none;
+    height: 36px;
+    padding: 0 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    border: 1px solid #ebb0b0;
+    border-radius: 8px;
+    color: #c90b0b;
+    font-size: 13px;
+    font-weight: 650;
+    background: #fffafa;
+    cursor: pointer;
+    transition:
+        color 0.18s ease,
+        border-color 0.18s ease,
+        background 0.18s ease,
+        box-shadow 0.18s ease,
+        transform 0.18s ease;
+}
+
+.artist-alias-add-button:hover:not(:disabled) {
+    color: #ffffff;
+    border-color: #d20a0a;
+    background: #d20a0a;
+    box-shadow:
+        0 6px 16px
+        rgba(210, 10, 10, 0.18);
+    transform: translateY(-1px);
+}
+
+.artist-alias-add-button:disabled {
+    color: #b5b5b5;
+    border-color: #e6e6e6;
+    background: #f5f5f5;
+    cursor: not-allowed;
+}
+
+.artist-alias-list {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.artist-alias-row {
+    display: grid;
+    grid-template-columns:
+        minmax(0, 1fr)
+        72px;
+    gap: 10px;
+}
+
+.artist-alias-row input {
+    min-width: 0;
+}
+
+.artist-alias-delete-button {
+    height: 100%;
+    min-height: 42px;
+    border: 1px solid #e2e2e2;
+    border-radius: 8px;
+    color: #666666;
+    font-size: 13px;
+    font-weight: 600;
+    background: #ffffff;
+    cursor: pointer;
+    transition:
+        color 0.18s ease,
+        border-color 0.18s ease,
+        background 0.18s ease;
+}
+
+.artist-alias-delete-button:hover:not(:disabled) {
+    color: #c90b0b;
+    border-color: #efb2b2;
+    background: #fff5f5;
+}
+
+.artist-alias-delete-button:disabled {
+    color: #b5b5b5;
+    border-color: #e9e9e9;
+    background: #f5f5f5;
+    cursor: not-allowed;
+}
+
+@media (max-width: 560px) {
+    .artist-alias-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .artist-alias-add-button {
+        align-self: flex-start;
+    }
+
+    .artist-alias-row {
+        grid-template-columns:
+            minmax(0, 1fr)
+            64px;
+    }
+}

@@ -14,7 +14,7 @@ public final class ArtistPublicModels {
     public record ArtistDetail(
             String id,
             String name,
-            String translatedName,
+            List<String> translatedNames,
             String ownerUserId,
             String avatarUrl,
             String countryRegion,

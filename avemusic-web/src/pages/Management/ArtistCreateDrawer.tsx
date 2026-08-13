@@ -15,6 +15,7 @@ import {
 import { uploadFile } from "../../api/file";
 import { getApiError } from "../../auth/api/http";
 import "../../styles/Management/ArtistAvatarCrop.css";
+import "../../styles/Management/ArtistCreateDrawer.css";
 
 interface ArtistCreateDrawerProps {
     open: boolean;
@@ -26,7 +27,6 @@ interface ArtistCreateDrawerProps {
 
 interface ArtistFormState {
     name: string;
-    translatedName: string;
     countryRegion: string;
     style: string;
     introduction: string;
@@ -34,19 +34,18 @@ interface ArtistFormState {
 
 const initialForm: ArtistFormState = {
     name: "",
-    translatedName: "",
     countryRegion: "",
     style: "",
     introduction: "",
 };
 
 export default function ArtistCreateDrawer({
-    open,
-    artist = null,
-    onClose,
-    onCreated,
-    onSaved,
-}: ArtistCreateDrawerProps) {
+                                               open,
+                                               artist = null,
+                                               onClose,
+                                               onCreated,
+                                               onSaved,
+                                           }: ArtistCreateDrawerProps) {
     const [form, setForm] =
         useState<ArtistFormState>(
             initialForm,
@@ -82,6 +81,15 @@ export default function ArtistCreateDrawer({
     const [error, setError] =
         useState("");
 
+    const [
+        translatedNames,
+        setTranslatedNames,
+    ] = useState<string[]>([
+        "",
+    ]);
+
+
+
     useEffect(() => {
         if (!open) {
             return;
@@ -89,6 +97,7 @@ export default function ArtistCreateDrawer({
 
         if (artist === null) {
             setForm(initialForm);
+            setTranslatedNames([""]);
             setAvatarFile(null);
             setAvatarPreviewUrl("");
             setError("");
@@ -97,11 +106,17 @@ export default function ArtistCreateDrawer({
 
         setForm({
             name: artist.name,
-            translatedName: artist.translatedName ?? "",
             countryRegion: artist.countryRegion ?? "",
             style: artist.style ?? "",
             introduction: artist.introduction ?? "",
         });
+
+        setTranslatedNames(
+            artist.translatedNames.length > 0
+                ? [...artist.translatedNames]
+                : [""],
+        );
+
         setAvatarFile(null);
         setAvatarPreviewUrl(artist.avatarUrl ?? "");
         setError("");
@@ -202,6 +217,7 @@ export default function ArtistCreateDrawer({
 
     function reset(): void {
         setForm(initialForm);
+        setTranslatedNames([""]);
         setAvatarFile(null);
         setAvatarPreviewUrl("");
         setCropSourceFile(null);
@@ -221,6 +237,46 @@ export default function ArtistCreateDrawer({
         onClose();
     }
 
+    function addTranslatedName(): void {
+        if (translatedNames.length >= 10) {
+            setError("音乐人最多添加10个译名");
+            return;
+        }
+
+        setTranslatedNames((current) => [
+            ...current,
+            "",
+        ]);
+    }
+
+    function updateTranslatedName(
+        index: number,
+        value: string,
+    ): void {
+        setTranslatedNames((current) =>
+            current.map((item, currentIndex) =>
+                currentIndex === index
+                    ? value
+                    : item,
+            ),
+        );
+    }
+
+    function removeTranslatedName(
+        index: number,
+    ): void {
+        setTranslatedNames((current) => {
+            const next = current.filter(
+                (_, currentIndex) =>
+                    currentIndex !== index,
+            );
+
+            return next.length > 0
+                ? next
+                : [""];
+        });
+    }
+
     async function handleSubmit(
         event: FormEvent<HTMLFormElement>,
     ): Promise<void> {
@@ -230,6 +286,25 @@ export default function ArtistCreateDrawer({
         const name = form.name.trim();
         const countryRegion =
             form.countryRegion.trim();
+
+        const resolvedTranslatedNames =
+            translatedNames
+                .map((item) =>
+                    item.trim(),
+                )
+                .filter(
+                    (
+                        item,
+                        index,
+                        values,
+                    ) =>
+                        item.length > 0
+                        && values.findIndex(
+                            (value) =>
+                                value.toLowerCase()
+                                === item.toLowerCase(),
+                        ) === index,
+                );
 
         if (name.length === 0) {
             setError("请输入音乐人名称");
@@ -272,18 +347,33 @@ export default function ArtistCreateDrawer({
 
             const request = {
                 name,
-                translatedName:
-                    form.translatedName.trim()
-                        || null,
+                translatedNames:
+                resolvedTranslatedNames,
                 countryRegion,
                 style:
                     form.style.trim()
-                        || null,
+                    || null,
                 introduction:
                     form.introduction.trim()
-                        || null,
+                    || null,
                 avatarUrl,
             };
+
+            console.log(
+                "[ArtistCreateDrawer] translatedNames =",
+                translatedNames,
+            );
+
+            console.log(
+                "[ArtistCreateDrawer] resolvedTranslatedNames =",
+                resolvedTranslatedNames,
+            );
+
+            console.log(
+                "[ArtistCreateDrawer] request =",
+                request,
+            );
+
 
             if (artist === null) {
                 const created =
@@ -386,24 +476,72 @@ export default function ArtistCreateDrawer({
                         />
                     </label>
 
-                    <label className="song-form-field">
-                        <span>译名</span>
+                    <div className="song-form-field">
+                        <div className="artist-alias-header">
+                            <div>
+                                <span>译名 / 别名</span>
+                                <small>
+                                    可填写英文名、中文译名、罗马音等；最多10个，
+                                    用于音乐人搜索及歌词匹配。
+                                </small>
+                            </div>
 
-                        <input
-                            value={form.translatedName}
-                            maxLength={128}
-                            placeholder="外国音乐人可填写中文译名"
-                            disabled={submitting}
-                            onChange={(
-                                event: ChangeEvent<HTMLInputElement>,
-                            ) =>
-                                updateField(
-                                    "translatedName",
-                                    event.target.value,
-                                )
-                            }
-                        />
-                    </label>
+                            <button
+                                type="button"
+                                className="artist-alias-add-button"
+                                disabled={
+                                    submitting
+                                    || translatedNames.length >= 10
+                                }
+                                onClick={addTranslatedName}
+                            >
+                                <span aria-hidden="true">＋</span>
+                                添加译名
+                            </button>
+                        </div>
+
+                        <div className="artist-alias-list">
+                            {translatedNames.map(
+                                (translatedName, index) => (
+                                    <div
+                                        key={index}
+                                        className="artist-alias-row"
+                                    >
+                                        <input
+                                            value={translatedName}
+                                            maxLength={128}
+                                            placeholder={
+                                                index === 0
+                                                    ? "例如：Aimyon"
+                                                    : "添加其他译名"
+                                            }
+                                            disabled={submitting}
+                                            onChange={(
+                                                event:
+                                                ChangeEvent<HTMLInputElement>,
+                                            ) =>
+                                                updateTranslatedName(
+                                                    index,
+                                                    event.target.value,
+                                                )
+                                            }
+                                        />
+
+                                        <button
+                                            type="button"
+                                            className="artist-alias-delete-button"
+                                            disabled={submitting}
+                                            onClick={() =>
+                                                removeTranslatedName(index)
+                                            }
+                                        >
+                                            删除
+                                        </button>
+                                    </div>
+                                ),
+                            )}
+                        </div>
+                    </div>
 
                     <label className="song-form-field">
                         <span>

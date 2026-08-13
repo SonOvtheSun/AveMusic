@@ -1446,7 +1446,7 @@ function ArtistSection({
         return artists.filter((artist) =>
             [
                 artist.name,
-                artist.translatedName,
+                ...(artist.translatedNames ?? []),
                 artist.countryRegion,
                 artist.style,
             ]
@@ -1639,9 +1639,11 @@ function ArtistSection({
                                 <td>
                                     <div className="management-entity-cell">
                                         <strong>{artist.name}</strong>
-                                        {artist.translatedName && (
+                                        {(artist.translatedNames ?? [])
+                                            .length > 0 && (
                                             <small>
-                                                {artist.translatedName}
+                                                {(artist.translatedNames ?? [])
+                                                    .join(" / ")}
                                             </small>
                                         )}
                                         <small>ID：{artist.id}</small>

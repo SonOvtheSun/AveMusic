@@ -49,7 +49,7 @@ public final class MusicManagementModels {
     public record ArtistItem(
             String id,
             String name,
-            String translatedName,
+            List<String> translatedNames,
             String ownerUserId,
             String countryRegion,
             String style,
@@ -67,7 +67,7 @@ public final class MusicManagementModels {
     public record ArtistSearchItem(
             String id,
             String name,
-            String translatedName,
+            List<String> translatedNames,
             String avatarUrl,
             String countryRegion,
             String auditStatus
@@ -85,7 +85,7 @@ public final class MusicManagementModels {
 
     public record CreateArtistRequest(
             String name,
-            String translatedName,
+            List<String> translatedNames,
             String countryRegion,
             String style,
             String introduction,
@@ -97,7 +97,7 @@ public final class MusicManagementModels {
     public record UpdateArtistRequest(
             String id,
             String name,
-            String translatedName,
+            List<String> translatedNames,
             String countryRegion,
             String style,
             String introduction,

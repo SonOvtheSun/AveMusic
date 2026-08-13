@@ -385,3 +385,32 @@
         width: 100%;
     }
 }
+
+.player-lyrics-button {
+    min-width: 34px;
+    height: 34px;
+
+    border: 0;
+    border-radius: 6px;
+
+    color: #bbbbbb;
+
+    cursor: pointer;
+
+    background: transparent;
+}
+
+.player-lyrics-button:hover,
+.player-lyrics-button.active {
+    color: #ffffff;
+
+    background:
+            rgba(
+                    255,
+                    255,
+                    255,
+                    0.09
+            );
+}
+
+

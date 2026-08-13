@@ -1,14 +1,21 @@
 package com.avemonica.avemusic.music.provider.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
-@TableName("singer_tb")
+@TableName(
+        value = "singer_tb",
+        autoResultMap = true
+)
 public class ArtistDO {
 
     @TableId(type = IdType.ASSIGN_ID)
@@ -19,7 +26,14 @@ public class ArtistDO {
     private String introduction;
     private String avatarUrl;
     private String countryRegion;
-    private String translatedName;
+
+    @TableField(
+            value = "translated_name",
+            typeHandler = JacksonTypeHandler.class
+    )
+    private List<String> translatedNames =
+            new ArrayList<>();
+
     private String style;
     private String nameInitial;
     private Long followerCount;

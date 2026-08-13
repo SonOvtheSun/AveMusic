@@ -142,7 +142,7 @@ function buildInitialArtists(
             name:
                 names[index]
                 ?? `音乐人 ${id}`,
-            translatedName: null,
+            translatedNames: [],
             avatarUrl: null,
             countryRegion: null,
 
@@ -1031,7 +1031,11 @@ function ArtistSearchField({
 
                                         <small>
                                             {[
-                                                    artist.translatedName,
+                                                    artist.translatedNames
+                                                        .length > 0
+                                                        ? artist.translatedNames
+                                                            .join(" / ")
+                                                        : null,
                                                     artist.countryRegion,
                                                 ]
                                                     .filter(Boolean)

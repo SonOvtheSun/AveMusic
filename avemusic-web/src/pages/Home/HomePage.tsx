@@ -35,8 +35,8 @@ type Banner = {
 
 type BannerStyle =
     CSSProperties & {
-        "--banner-accent": string;
-    };
+    "--banner-accent": string;
+};
 
 const banners: Banner[] = [
     {
@@ -83,15 +83,17 @@ function formatCount(value: number): string {
 }
 
 function artistSubtitle(
-        artist: ArtistCard,
+    artist: ArtistCard,
 ): string {
-    const values = [
-        artist.translatedName,
-    ].filter(
-        (value): value is string =>
-            value !== null
-            && value.trim() !== "",
-    );
+    const values =
+        (artist.translatedNames ?? [])
+            .map((value) =>
+                value.trim(),
+            )
+            .filter(
+                (value) =>
+                    value.length > 0,
+            );
 
     return values.length === 0
         ? "音乐人"
@@ -204,7 +206,7 @@ export default function HomePage() {
                         ? {
                             ...song,
                             playCount:
-                                detail.playCount,
+                            detail.playCount,
                         }
                         : song,
                 ),
@@ -347,7 +349,7 @@ export default function HomePage() {
 
     const bannerStyle: BannerStyle = {
         "--banner-accent":
-            currentBanner.accent,
+        currentBanner.accent,
 
         backgroundImage:
             `linear-gradient(
@@ -405,7 +407,7 @@ export default function HomePage() {
                                         playHomeSong(
                                             songs[
                                                 firstPlayableIndex
-                                            ],
+                                                ],
                                         );
                                     }
                                 }}
@@ -523,7 +525,7 @@ export default function HomePage() {
                                                                     !song.audioUrl
                                                                         ? "暂无音频"
                                                                         : active
-                                                                            && isPlaying
+                                                                        && isPlaying
                                                                             ? "暂停"
                                                                             : "播放"
                                                                 }
@@ -531,7 +533,7 @@ export default function HomePage() {
                                                                     !song.audioUrl
                                                                         ? "暂无音频"
                                                                         : active
-                                                                            && isPlaying
+                                                                        && isPlaying
                                                                             ? "暂停"
                                                                             : "播放"
                                                                 }
@@ -559,7 +561,7 @@ export default function HomePage() {
 
                                                                         <span>
                                                                             {active
-                                                                                && isPlaying
+                                                                            && isPlaying
                                                                                 ? "暂停"
                                                                                 : "播放"}
                                                                         </span>

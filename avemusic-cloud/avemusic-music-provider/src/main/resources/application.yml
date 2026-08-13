@@ -1,3 +1,14 @@
+avemusic:
+  lyrics:
+    lrclib-base-url: https://lrclib.net
+
+  ai:
+    ollama:
+      base-url: http://127.0.0.1:11434
+      model: qwen3.5:9b
+      connect-timeout-seconds: 5
+      read-timeout-seconds: 180
+
 spring:
   application:
     name: avemusic-music-provider

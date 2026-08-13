@@ -3,6 +3,7 @@ package com.avemonica.avemusic.gateway.controller.music;
 import com.avemonica.avemusic.common.web.ApiResult;
 import com.avemonica.avemusic.gateway.security.ManagementActorResolver;
 import com.avemonica.avemusic.gateway.service.PlaySessionService;
+import com.avemonica.avemusic.music.api.dto.LyricsModels.LyricsResult;
 import com.avemonica.avemusic.music.api.dto.MusicManagementModels.BatchDeleteRequest;
 import com.avemonica.avemusic.music.api.dto.MusicManagementModels.CreateSongRequest;
 import com.avemonica.avemusic.music.api.dto.MusicManagementModels.ReviewRequest;
@@ -10,6 +11,7 @@ import com.avemonica.avemusic.music.api.dto.MusicManagementModels.SongItem;
 import com.avemonica.avemusic.music.api.dto.MusicManagementModels.UpdateSongRequest;
 import com.avemonica.avemusic.music.api.dto.MusicManagementModels.PageResult;
 import com.avemonica.avemusic.music.api.dto.MusicModels.SongCard;
+import com.avemonica.avemusic.music.api.service.LyricsService;
 import com.avemonica.avemusic.music.api.service.MusicService;
 import com.avemonica.minirpc.spring.annotation.MiniRpcReference;
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,6 +40,20 @@ public class SongController {
     )
     private MusicService musicService;
 
+    @MiniRpcReference(
+            host = "127.0.0.1",
+            port = 20882,
+            group = "music",
+            version = "1.0.0",
+
+            /*
+             * 歌词翻译需要调用本地大模型，
+             * 不能使用普通 RPC 的 3 秒超时。
+             */
+            timeoutMillis = 100_000
+    )
+    private LyricsService lyricsService;
+
     private final ManagementActorResolver actorResolver;
     private final PlaySessionService playSessionService;
 
@@ -48,6 +64,33 @@ public class SongController {
         this.actorResolver = actorResolver;
         this.playSessionService =
                 playSessionService;
+    }
+
+    @GetMapping("/{songId}/lyrics")
+    public ApiResult<LyricsResult>
+    lyrics(
+            @PathVariable
+            String songId
+    ) {
+        return ApiResult.success(
+                lyricsService.getLyrics(
+                        songId
+                )
+        );
+    }
+
+    @PostMapping("/{songId}/lyrics/translate")
+    public ApiResult<LyricsResult>
+    translateLyrics(
+            @PathVariable
+            String songId
+    ) {
+        return ApiResult.success(
+                lyricsService
+                        .translateLyrics(
+                                songId
+                        )
+        );
     }
 
     @GetMapping("/home")

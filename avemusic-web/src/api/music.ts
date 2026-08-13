@@ -6,6 +6,68 @@ export interface ApiResult<T> {
     data: T;
 }
 
+export interface SongLyrics {
+    songId: string;
+
+    status:
+        | "MATCHED"
+        | "NOT_FOUND";
+
+    instrumental: boolean;
+
+    synced: boolean;
+
+    plainLyrics:
+        string | null;
+
+    syncedLyrics:
+        string | null;
+
+    /*
+     * 与解析后的歌词行一一对应。
+     */
+    translatedLines:
+        string[];
+
+    source:
+        string | null;
+}
+
+export async function getSongLyrics(
+    songId: string,
+): Promise<SongLyrics> {
+    const response =
+        await http.get<
+            ApiResult<SongLyrics>
+        >(
+            `/music/songs/${songId}/lyrics`,
+        );
+
+    return response.data.data;
+}
+
+export async function translateSongLyrics(
+    songId: string,
+): Promise<SongLyrics> {
+    const response =
+        await http.post<
+            ApiResult<SongLyrics>
+        >(
+            `/music/songs/${songId}/lyrics/translate`,
+        );
+
+    const result =
+        response.data.data;
+
+    return {
+        ...result,
+
+        translatedLines:
+            result.translatedLines
+            ?? [],
+    };
+}
+
 export interface SongCard {
     id: string;
     name: string;
@@ -37,7 +99,7 @@ export interface SongCard {
 export interface ArtistCard {
     id: string;
     name: string;
-    translatedName: string | null;
+    translatedNames: string[];
     avatarUrl: string | null;
     countryRegion: string | null;
     followerCount: number;
@@ -140,7 +202,7 @@ export interface ArtistDetailAlbum {
 export interface ArtistDetail {
     id: string;
     name: string;
-    translatedName: string | null;
+    translatedNames: string[];
     ownerUserId: string | null;
     avatarUrl: string | null;
     countryRegion: string | null;

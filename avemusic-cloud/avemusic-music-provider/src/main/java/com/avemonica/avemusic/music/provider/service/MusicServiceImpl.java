@@ -42,17 +42,15 @@ import com.avemonica.minirpc.core.exception.RpcBusinessException;
 import com.avemonica.minirpc.spring.annotation.MiniRpcService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Locale;
+import java.util.*;
 
 @MiniRpcService(
         interfaceClass = MusicService.class,
@@ -346,9 +344,9 @@ public class MusicServiceImpl
         return new ArtistDetail(
                 text(detail, "artistId"),
                 text(detail, "artistName"),
-                nullableText(
+                jsonStringList(
                         detail,
-                        "translatedName"
+                        "translatedNames"
                 ),
                 nullableText(
                         detail,
@@ -635,9 +633,9 @@ public class MusicServiceImpl
 
         ArtistDO artist = new ArtistDO();
         artist.setName(name);
-        artist.setTranslatedName(
-                nullableText(
-                        request.translatedName()
+        artist.setTranslatedNames(
+                normalizeTranslatedNames(
+                        request.translatedNames()
                 )
         );
         artist.setCountryRegion(
@@ -690,11 +688,18 @@ public class MusicServiceImpl
         }
 
         return new ArtistSearchItem(
-                String.valueOf(artist.getId()),
+                String.valueOf(
+                        artist.getId()
+                ),
+
                 artist.getName(),
-                artist.getTranslatedName(),
+
+                artist.getTranslatedNames(),
+
                 artist.getAvatarUrl(),
+
                 artist.getCountryRegion(),
+
                 artist.getAuditStatus()
         );
     }
@@ -737,8 +742,10 @@ public class MusicServiceImpl
         }
 
         artist.setName(name);
-        artist.setTranslatedName(
-                nullableText(request.translatedName())
+        artist.setTranslatedNames(
+                normalizeTranslatedNames(
+                        request.translatedNames()
+                )
         );
         artist.setCountryRegion(countryRegion);
         artist.setStyle(nullableText(request.style()));
@@ -2352,9 +2359,9 @@ public class MusicServiceImpl
         return new ArtistCard(
                 text(row, "artistId"),
                 text(row, "artistName"),
-                nullableText(
+                jsonStringList(
                         row,
-                        "translatedName"
+                        "translatedNames"
                 ),
                 nullableText(row, "avatarUrl"),
                 nullableText(
@@ -2365,6 +2372,64 @@ public class MusicServiceImpl
                         row,
                         "followerCount"
                 )
+        );
+    }
+
+    private static List<String>
+    normalizeTranslatedNames(
+            List<String> values
+    ) {
+        if (
+                values == null
+                        || values.isEmpty()
+        ) {
+            return List.of();
+        }
+
+        LinkedHashMap<
+                String,
+                String
+                > unique =
+                new LinkedHashMap<>();
+
+        for (String value : values) {
+            if (value == null) {
+                continue;
+            }
+
+            String normalized =
+                    value.trim();
+
+            if (normalized.isEmpty()) {
+                continue;
+            }
+
+            if (normalized.length() > 128) {
+                throw new RpcBusinessException(
+                        MusicErrorCode
+                                .INVALID_PARAMETER,
+                        "单个音乐人译名不能超过128个字符"
+                );
+            }
+
+            unique.putIfAbsent(
+                    normalized.toLowerCase(
+                            Locale.ROOT
+                    ),
+                    normalized
+            );
+        }
+
+        if (unique.size() > 10) {
+            throw new RpcBusinessException(
+                    MusicErrorCode
+                            .INVALID_PARAMETER,
+                    "音乐人最多添加10个译名"
+            );
+        }
+
+        return List.copyOf(
+                unique.values()
         );
     }
 
@@ -2415,7 +2480,7 @@ public class MusicServiceImpl
         return new ArtistItem(
                 text(row, "artistId"),
                 text(row, "artistName"),
-                nullableText(row, "translatedName"),
+                jsonStringList(row, "translatedNames"),
                 nullableText(row, "ownerUserId"),
                 nullableText(row, "countryRegion"),
                 nullableText(row, "style"),
@@ -2436,9 +2501,9 @@ public class MusicServiceImpl
         return new ArtistSearchItem(
                 text(row, "artistId"),
                 text(row, "artistName"),
-                nullableText(
+                jsonStringList(
                         row,
-                        "translatedName"
+                        "translatedNames"
                 ),
                 nullableText(row, "avatarUrl"),
                 nullableText(
@@ -2598,5 +2663,46 @@ public class MusicServiceImpl
                 (total + size - 1)
                         / size
         );
+    }
+
+    private static final ObjectMapper
+            JSON_MAPPER =
+            new ObjectMapper();
+
+    private static List<String>
+    jsonStringList(
+            Map<String, Object> row,
+            String key
+    ) {
+        Object value =
+                row.get(key);
+
+        if (value == null) {
+            return List.of();
+        }
+
+        String json =
+                value.toString()
+                        .trim();
+
+        if (
+                json.isEmpty()
+                        || "null".equals(json)
+        ) {
+            return List.of();
+        }
+
+        try {
+            return JSON_MAPPER.readValue(
+                    json,
+                    new TypeReference<List<String>>() {
+                    }
+            );
+        } catch (Exception exception) {
+            throw new IllegalStateException(
+                    "音乐人译名JSON格式错误",
+                    exception
+            );
+        }
     }
 }

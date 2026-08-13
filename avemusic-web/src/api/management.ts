@@ -48,7 +48,7 @@ export interface AlbumManagementItem {
 export interface ArtistManagementItem {
     id: string;
     name: string;
-    translatedName: string | null;
+    translatedNames: string[];
     ownerUserId: string | null;
     countryRegion: string | null;
     style: string | null;
@@ -65,7 +65,7 @@ export interface ArtistManagementItem {
 export interface ArtistSearchItem {
     id: string;
     name: string;
-    translatedName: string | null;
+    translatedNames: string[];
     avatarUrl: string | null;
     countryRegion: string | null;
     auditStatus: "APPROVED" | "PENDING";
@@ -118,7 +118,7 @@ export interface UpdateSongRequest {
 
 export interface CreateArtistRequest {
     name: string;
-    translatedName: string | null;
+    translatedNames: string[];
     countryRegion: string;
     style: string | null;
     introduction: string | null;
