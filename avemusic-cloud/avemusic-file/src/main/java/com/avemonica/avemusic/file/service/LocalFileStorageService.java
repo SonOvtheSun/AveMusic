@@ -100,8 +100,7 @@ public final class LocalFileStorageService {
                         .replace('\\', '/');
 
         String url =
-                properties.publicBaseUrl()
-                        + "/files/"
+                "/files/"
                         + relativePath;
 
         return new StoredFile(
@@ -113,6 +112,154 @@ public final class LocalFileStorageService {
                 file.getSize(),
                 contentType(file)
         );
+    }
+
+    /**
+     * 分片上传完成后，把已经在服务端合并好的临时文件转存到正式目录。
+     *
+     * 这里不再要求 MultipartFile，避免为了一个已经落盘的完整文件
+     * 再人为构造 MultipartFile。
+     */
+    public StoredFile store(
+            Path sourceFile,
+            String originalFileName,
+            String sourceContentType,
+            StorageCategory category
+    ) throws IOException {
+        validate(
+                sourceFile,
+                originalFileName,
+                sourceContentType,
+                category
+        );
+
+        String extension =
+                extractExtension(
+                        originalFileName
+                );
+
+        String dateDirectory =
+                LocalDateTime.now().format(
+                        DATE_DIRECTORY_FORMAT
+                );
+
+        Path relativeDirectory =
+                Path.of(
+                        category.directory(),
+                        dateDirectory
+                );
+
+        Path targetDirectory =
+                properties.root()
+                        .resolve(relativeDirectory)
+                        .normalize();
+
+        ensureInsideRoot(targetDirectory);
+        Files.createDirectories(targetDirectory);
+
+        String fileName =
+                UUID.randomUUID()
+                        .toString()
+                        .replace("-", "")
+                        + "."
+                        + extension;
+
+        Path target =
+                targetDirectory
+                        .resolve(fileName)
+                        .normalize();
+
+        ensureInsideRoot(target);
+
+        /*
+         * sourceFile 位于系统临时目录，正式文件位于 storage root。
+         * 使用 copy 可以兼容两个目录位于不同磁盘/文件系统的情况。
+         */
+        Files.copy(
+                sourceFile,
+                target
+        );
+
+        String relativePath =
+                properties.root()
+                        .relativize(target)
+                        .toString()
+                        .replace('\\', '/');
+
+        String url =
+                "/files/"
+                        + relativePath;
+
+        return new StoredFile(
+                category.requestValue(),
+                originalFileName,
+                fileName,
+                relativePath,
+                url,
+                Files.size(target),
+                normalizeContentType(
+                        sourceContentType
+                )
+        );
+    }
+
+    private static void validate(
+            Path sourceFile,
+            String originalFileName,
+            String sourceContentType,
+            StorageCategory category
+    ) throws IOException {
+        if (sourceFile == null
+                || !Files.isRegularFile(sourceFile)
+                || Files.size(sourceFile) <= 0) {
+            throw new IllegalArgumentException(
+                    "上传文件不能为空"
+            );
+        }
+
+        long size = Files.size(sourceFile);
+
+        if (size > category.maxBytes()) {
+            throw new IllegalArgumentException(
+                    category.displayName()
+                            + "不能超过"
+                            + category.maxDisplaySize()
+            );
+        }
+
+        String extension =
+                extractExtension(
+                        originalFileName
+                );
+
+        if (!category.extensions()
+                .contains(extension)) {
+            throw new IllegalArgumentException(
+                    category.displayName()
+                            + "不支持该文件格式，可用格式："
+                            + String.join(
+                            ", ",
+                            category.extensions()
+                    )
+            );
+        }
+
+        if (category.image()) {
+            try (InputStream inputStream =
+                         Files.newInputStream(
+                                 sourceFile
+                         )) {
+                if (ImageIO.read(inputStream) == null) {
+                    throw new IllegalArgumentException(
+                            "文件内容不是有效图片"
+                    );
+                }
+            }
+        } else {
+            validateAudioContentType(
+                    sourceContentType
+            );
+        }
     }
 
     private static void validate(
@@ -173,9 +320,14 @@ public final class LocalFileStorageService {
     private static void validateAudioContentType(
             MultipartFile file
     ) {
-        String contentType =
-                file.getContentType();
+        validateAudioContentType(
+                file.getContentType()
+        );
+    }
 
+    private static void validateAudioContentType(
+            String contentType
+    ) {
         if (contentType == null
                 || contentType.isBlank()
                 || "application/octet-stream"
@@ -231,9 +383,14 @@ public final class LocalFileStorageService {
     private static String contentType(
             MultipartFile file
     ) {
-        String contentType =
-                file.getContentType();
+        return normalizeContentType(
+                file.getContentType()
+        );
+    }
 
+    private static String normalizeContentType(
+            String contentType
+    ) {
         return contentType == null
                 || contentType.isBlank()
                 ? "application/octet-stream"

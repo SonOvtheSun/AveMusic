@@ -120,7 +120,9 @@ public class SecurityConfig {
                                                 "/api/music/artists/detail/**",
                                                 "/api/music/albums/detail/**",
                                                 "/api/playlists/ranking",
-                                                "/api/music/songs/*/lyrics"
+                                                "/api/music/songs/*/lyrics",
+                                                "/api/music/search",
+                                                "/api/music/artists/directory"
                                         )
                                         .permitAll()
 

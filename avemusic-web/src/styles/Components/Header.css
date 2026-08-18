@@ -53,50 +53,147 @@
 .header-nav {
     height: 70px;
     flex: 1;
+
     display: flex;
-    align-items: stretch;
+    align-items: center;
+
+    gap: 8px;
 }
 
-.header-nav-item {
-    height: 70px;
-    padding: 0 18px;
-    border: 0;
-    color: #cccccc;
-    background: transparent;
-    cursor: pointer;
-}
 
 .header-nav-item {
     position: relative;
+
+    height: 42px;
+    padding: 0 20px;
+
+    border: 1px solid transparent;
+    border-radius: 12px;
+
+    color: #cfcfcf;
+
+    font-size: 16px;
+    font-weight: 500;
+
+    background: transparent;
+
+    cursor: pointer;
+
+    transition:
+            color 0.18s ease,
+            background 0.18s ease,
+            border-color 0.18s ease,
+            transform 0.18s ease,
+            box-shadow 0.18s ease;
 }
 
+
+/* 鼠标悬浮 */
 .header-nav-item:hover {
     color: #ffffff;
 
     background:
-            rgba(0, 0, 0, 0.18);
+            rgba(
+                    255,
+                    255,
+                    255,
+                    0.07
+            );
+
+    border-color:
+            rgba(
+                    255,
+                    255,
+                    255,
+                    0.08
+            );
+
+    transform:
+            translateY(-1px);
 }
 
+
+/* 当前页面 */
 .header-nav-item.active {
     color: #ffffff;
 
-    background: transparent;
+    font-weight: 650;
+
+    background:
+            linear-gradient(
+                    180deg,
+                    rgba(
+                            216,
+                            30,
+                            6,
+                            0.14
+                    ),
+                    rgba(
+                            216,
+                            30,
+                            6,
+                            0.06
+                    )
+            );
+
+    border-color:
+            rgba(
+                    255,
+                    85,
+                    70,
+                    0.22
+            );
+
+    box-shadow:
+            0 6px 18px
+            rgba(
+                    0,
+                    0,
+                    0,
+                    0.16
+            ),
+            inset 0 0 0 1px
+            rgba(
+                    255,
+                    255,
+                    255,
+                    0.025
+            );
 }
 
+
+/* 当前页面底部短红线 */
 .header-nav-item.active::after {
     content: "";
 
     position: absolute;
 
-    right: 18px;
-    bottom: 10px;
-    left: 18px;
+    left: 50%;
+    bottom: 4px;
 
-    height: 2px;
+    width: 26px;
+    height: 3px;
 
-    border-radius: 1px;
+    border-radius: 999px;
 
-    background: #e32626;
+    background:
+            linear-gradient(
+                    90deg,
+                    #ff4b4b,
+                    #d81e06
+            );
+
+    transform:
+            translateX(-50%);
+
+    box-shadow:
+            0 0 8px
+            rgba(
+                    216,
+                    30,
+                    6,
+                    0.45
+            );
 }
 
 .header-actions {
@@ -105,14 +202,70 @@
     gap: 12px;
 }
 
+.header-search-form {
+    position: relative;
+    width: 280px;
+    flex: 0 0 280px;
+}
+
 .header-search {
-    width: 240px;
+    width: 100%;
     height: 36px;
-    padding: 0 16px;
+    box-sizing: border-box;
+    padding:
+            0
+            62px
+            0
+            16px;
+
     border: 0;
     border-radius: 18px;
     outline: none;
+
+    color: #222222;
     background: #ffffff;
+}
+
+.header-search::placeholder {
+    color: #999999;
+}
+
+.header-search:focus {
+    box-shadow:
+            0 0 0 2px
+            rgba(
+                    194,
+                    12,
+                    12,
+                    0.28
+            );
+}
+
+.header-search-button {
+    position: absolute;
+    top: 4px;
+    right: 5px;
+
+    height: 28px;
+    padding: 0 11px;
+
+    border: 0;
+    border-radius: 14px;
+
+    color: #ffffff;
+    font-size: 12px;
+
+    background: #c20c0c;
+    cursor: pointer;
+}
+
+.header-search-button:hover {
+    background: #a80909;
+}
+
+.header-search-button:disabled {
+    opacity: 0.45;
+    cursor: default;
 }
 
 .header-login-button {
@@ -337,20 +490,3 @@
     }
 }
 
-
-/* 管理中心入口 */
-.header-nav-item.management {
-    position: relative;
-    color: #ffd8d8;
-}
-
-.header-nav-item.management::after {
-    content: "";
-    position: absolute;
-    left: 18px;
-    right: 18px;
-    bottom: 13px;
-    height: 2px;
-    border-radius: 999px;
-    background: #d81e06;
-}

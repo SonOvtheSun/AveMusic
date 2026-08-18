@@ -18,7 +18,6 @@ import {
     getManagedAlbums,
     getManagedArtists,
     getManagedSongs,
-    getManagedUsers,
     getAuditAlbums,
     getAuditArtists,
     getAuditSongs,
@@ -30,6 +29,8 @@ import {
     reviewAlbum,
     reviewArtist,
     reviewSong,
+    getManagedUsers,
+    updateUserRole,
     type AlbumManagementItem,
     type ArtistManagementItem,
     type ReviewAction,
@@ -41,6 +42,7 @@ import { getApiError } from "../../auth/api/http";
 import SongCreateDrawer from "./SongCreateDrawer";
 import ArtistCreateDrawer from "./ArtistCreateDrawer";
 import AlbumCreateDrawer from "./AlbumCreateDrawer";
+import LyricsReplaceDialog from "./LyricsReplaceDialog";
 
 import "../../styles/Management/ManagementPage.css";
 
@@ -71,6 +73,146 @@ const roleLabels: Record<UserRole, string> = {
     ARTIST: "音乐人",
     USER: "普通用户",
 };
+
+const USER_ROLE_OPTIONS: Array<{
+    value: UserRole;
+    label: string;
+}> = [
+    {
+        value: "SUPER_ADMIN",
+        label: "超级管理员",
+    },
+    {
+        value: "OPERATOR",
+        label: "运营人员",
+    },
+    {
+        value: "REVIEWER",
+        label: "审核员",
+    },
+    {
+        value: "ARTIST",
+        label: "音乐人",
+    },
+    {
+        value: "USER",
+        label: "普通用户",
+    },
+];
+
+function resolveFileUrl(
+    value: string | null | undefined,
+): string | null {
+
+    if (
+        value === null
+        || value === undefined
+    ) {
+        return null;
+    }
+
+    const url =
+        value.trim();
+
+    if (!url) {
+        return null;
+    }
+
+    /*
+     * blob/data URL：
+     * 前端临时预览时直接使用。
+     */
+    if (
+        url.startsWith("blob:")
+        || url.startsWith("data:")
+    ) {
+        return url;
+    }
+
+    /*
+     * 新数据已经是相对地址：
+     *
+     * /files/avatar/...
+     */
+    if (
+        url.startsWith("/files/")
+    ) {
+        return url;
+    }
+
+    /*
+     * 防止少一个 /
+     */
+    if (
+        url.startsWith("files/")
+    ) {
+        return `/${url}`;
+    }
+
+    /*
+     * 兼容数据库中的旧 File Service 地址。
+     *
+     * 不继续让浏览器访问：
+     *
+     * http://localhost:8090/files/...
+     *
+     * 而统一变成当前网站自己的：
+     *
+     * /files/...
+     *
+     * 本地由 Vite proxy，
+     * 部署后由 Nginx proxy。
+     */
+    try {
+
+        const parsed =
+            new URL(url);
+
+        if (
+            (
+                parsed.hostname
+                === "localhost"
+
+                || parsed.hostname
+                === "127.0.0.1"
+            )
+            && parsed.pathname
+                .startsWith(
+                    "/files/",
+                )
+        ) {
+            return (
+                parsed.pathname
+                + parsed.search
+                + parsed.hash
+            );
+        }
+
+    } catch {
+        /*
+         * 不是完整 URL，
+         * 继续使用原值。
+         */
+    }
+
+    /*
+     * 正常的 CDN / 对象存储 /
+     * 外部 https 图片继续原样使用。
+     */
+    return url;
+}
+
+function userRoleLabel(
+    role: UserRole,
+): string {
+    return (
+        USER_ROLE_OPTIONS.find(
+            (item) =>
+                item.value === role,
+        )?.label
+        ?? role
+    );
+}
 
 function availableSections(
     role: UserRole,
@@ -154,6 +296,13 @@ export default function ManagementPage() {
     const navigate = useNavigate();
     const { user, loading } = useAuth();
 
+    const [
+        roleUpdatingUserId,
+        setRoleUpdatingUserId,
+    ] = useState<string | null>(
+        null,
+    );
+
     const [section, setSection] =
         useState<Section>("MUSIC");
 
@@ -188,6 +337,9 @@ export default function ManagementPage() {
         useState(false);
 
     const [editingSong, setEditingSong] =
+        useState<SongManagementItem | null>(null);
+
+    const [lyricsSong, setLyricsSong] =
         useState<SongManagementItem | null>(null);
 
     const [editingAlbum, setEditingAlbum] =
@@ -559,6 +711,87 @@ export default function ManagementPage() {
         }
     }
 
+    async function handleUserRoleChange(
+        targetUser: UserManagementItem,
+        nextRole: UserRole,
+    ): Promise<void> {
+
+        /*
+         * 前端第一层限制。
+         */
+        if (
+            user?.role !==
+            "SUPER_ADMIN"
+        ) {
+            return;
+        }
+
+        if (
+            targetUser.role ===
+            nextRole
+        ) {
+            return;
+        }
+
+        /*
+         * 不允许超级管理员修改自己的角色。
+         * 防止把自己降权后无法继续管理系统。
+         */
+        if (
+            targetUser.id ===
+            user.userId
+        ) {
+            window.alert(
+                "不能修改自己的角色",
+            );
+
+            return;
+        }
+
+        const confirmed =
+            window.confirm(
+                `确定将用户“${targetUser.username}”`
+                + `的角色从“${userRoleLabel(targetUser.role)}”`
+                + `修改为“${userRoleLabel(nextRole)}”吗？\n\n`
+                + "修改后，该用户当前登录会话将失效，需要重新登录。",
+            );
+
+        if (!confirmed) {
+            return;
+        }
+
+        setRoleUpdatingUserId(
+            targetUser.id,
+        );
+
+        try {
+            await updateUserRole(
+                targetUser.id,
+                nextRole,
+            );
+
+            /*
+             * 重新查询用户列表。
+             *
+             * 你现有 loadCurrent() 已经会根据
+             * section === USER 重新获取用户。
+             */
+            await loadCurrent();
+
+        } catch (requestError) {
+            window.alert(
+                getApiError(
+                    requestError,
+                ).message,
+            );
+
+        } finally {
+            setRoleUpdatingUserId(
+                null,
+            );
+        }
+    }
+
     async function handleBatchDelete(
         target: DeleteTarget,
         ids: string[],
@@ -911,6 +1144,10 @@ export default function ManagementPage() {
                                 setAlbumDrawerOpen(true);
                             }}
 
+                            onManageLyrics={(song) => {
+                                setLyricsSong(song);
+                            }}
+
                             onDeleteSongs={(ids) => {
                                 void handleBatchDelete(
                                     "SONG",
@@ -962,7 +1199,34 @@ export default function ManagementPage() {
                     {section === "USER" && (
                         <UserSection
                             users={users}
-                            loading={dataLoading}
+
+                            loading={
+                                dataLoading
+                            }
+
+                            currentUserId={
+                                user?.userId
+                                ?? null
+                            }
+
+                            canChangeRole={
+                                user?.role
+                                === "SUPER_ADMIN"
+                            }
+
+                            roleUpdatingUserId={
+                                roleUpdatingUserId
+                            }
+
+                            onRoleChange={(
+                                targetUser,
+                                role,
+                            ) => {
+                                void handleUserRoleChange(
+                                    targetUser,
+                                    role,
+                                );
+                            }}
                         />
                     )}
 
@@ -1009,6 +1273,15 @@ export default function ManagementPage() {
                     setEditingSong(null);
                 }}
                 onCreated={loadCurrent}
+            />
+
+            <LyricsReplaceDialog
+                open={lyricsSong !== null}
+                song={lyricsSong}
+                onClose={() => {
+                    setLyricsSong(null);
+                }}
+                onReplaced={loadCurrent}
             />
 
             <AlbumCreateDrawer
@@ -1126,6 +1399,51 @@ function Tabs<T extends string>({
     );
 }
 
+function ArtistAvatar({
+                          artist,
+                      }: {
+    artist: ArtistManagementItem;
+}) {
+    const [
+        failed,
+        setFailed,
+    ] = useState(false);
+
+    const avatarUrl =
+        resolveFileUrl(
+            artist.avatarUrl,
+        );
+
+    if (
+        avatarUrl === null
+        || failed
+    ) {
+        return (
+            <span
+                className={
+                    "artist-table-avatar fallback"
+                }
+            >
+                {
+                    artist.name
+                        .slice(0, 1)
+                }
+            </span>
+        );
+    }
+
+    return (
+        <img
+            src={avatarUrl}
+            alt={artist.name}
+            className="artist-table-avatar"
+            onError={() =>
+                setFailed(true)
+            }
+        />
+    );
+}
+
 function MusicSection({
                           tab,
                           songs,
@@ -1156,6 +1474,7 @@ function MusicSection({
 
                           onEditSong,
                           onEditAlbum,
+                          onManageLyrics,
 
                           onDeleteSongs,
                           onDeleteAlbums,
@@ -1217,6 +1536,11 @@ function MusicSection({
     onEditAlbum(
         album:
         AlbumManagementItem,
+    ): void;
+
+    onManageLyrics(
+        song:
+        SongManagementItem,
     ): void;
 
     onDeleteSongs(
@@ -1364,6 +1688,9 @@ function MusicSection({
                     onEdit={
                         onEditSong
                     }
+                    onLyrics={
+                        onManageLyrics
+                    }
                     onDelete={(id) =>
                         onDeleteSongs(
                             [id],
@@ -1403,6 +1730,49 @@ function MusicSection({
                 }
             />
         </>
+    );
+}
+
+function ArtistCardAvatar({
+                              artist,
+                          }: {
+    artist: ArtistManagementItem;
+}) {
+    const [
+        failed,
+        setFailed,
+    ] = useState(false);
+
+    const avatarUrl =
+        resolveFileUrl(
+            artist.avatarUrl,
+        );
+
+    if (
+        avatarUrl === null
+        || failed
+    ) {
+        return (
+            <span className="management-artist-avatar">
+                {
+                    artist.name
+                        .slice(0, 1)
+                }
+            </span>
+        );
+    }
+
+    return (
+        <img
+            src={avatarUrl}
+            alt={artist.name}
+            className={
+                "management-artist-avatar image"
+            }
+            onError={() =>
+                setFailed(true)
+            }
+        />
     );
 }
 
@@ -1451,7 +1821,8 @@ function ArtistSection({
                 artist.style,
             ]
                 .filter((value): value is string =>
-                    Boolean(value),
+                    typeof value === "string"
+                    && value.length > 0,
                 )
                 .some((value) =>
                     value.toLowerCase()
@@ -1623,27 +1994,17 @@ function ArtistSection({
                                 </td>
 
                                 <td>
-                                    {artist.avatarUrl ? (
-                                        <img
-                                            src={artist.avatarUrl}
-                                            alt={artist.name}
-                                            className="artist-table-avatar"
-                                        />
-                                    ) : (
-                                        <span className="artist-table-avatar fallback">
-                                            {artist.name.slice(0, 1)}
-                                        </span>
-                                    )}
+                                    <ArtistAvatar
+                                        artist={artist}
+                                    />
                                 </td>
 
                                 <td>
                                     <div className="management-entity-cell">
                                         <strong>{artist.name}</strong>
-                                        {(artist.translatedNames ?? [])
-                                            .length > 0 && (
+                                        {artist.translatedNames.length > 0 && (
                                             <small>
-                                                {(artist.translatedNames ?? [])
-                                                    .join(" / ")}
+                                                {artist.translatedNames.join(" / ")}
                                             </small>
                                         )}
                                         <small>ID：{artist.id}</small>
@@ -1742,79 +2103,221 @@ function ArtistSection({
 function UserSection({
                          users,
                          loading,
+                         currentUserId,
+                         canChangeRole,
+                         roleUpdatingUserId,
+                         onRoleChange,
                      }: {
-    users: UserManagementItem[];
-    loading: boolean;
+    users:
+        UserManagementItem[];
+
+    loading:
+        boolean;
+
+    currentUserId:
+        string | null;
+
+    canChangeRole:
+        boolean;
+
+    roleUpdatingUserId:
+        string | null;
+
+    onRoleChange(
+        user:
+        UserManagementItem,
+
+        role:
+        UserRole,
+    ): void;
 }) {
     return (
         <>
             <PageTitle
                 title="用户管理"
-                description="查看用户角色、实名和账号状态"
+                description={
+                    canChangeRole
+                        ? "管理用户资料与角色；角色修改仅超级管理员可操作"
+                        : "查看用户资料、角色和账号状态"
+                }
             />
 
             {loading ? (
                 <LoadingBlock />
+
             ) : users.length === 0 ? (
                 <EmptyBlock />
+
             ) : (
                 <div className="management-table-box">
-                    <table className="management-table">
+                    <table className="management-table user-management-table">
                         <thead>
                         <tr>
-                            <th>用户ID</th>
-                            <th>用户名</th>
-                            <th>手机号</th>
-                            <th>角色</th>
-                            <th>实名状态</th>
-                            <th>账号状态</th>
-                            <th>音乐人ID</th>
+                            <th>
+                                用户ID
+                            </th>
+
+                            <th>
+                                用户名
+                            </th>
+
+                            <th>
+                                手机号
+                            </th>
+
+                            <th>
+                                角色
+                            </th>
+
+                            <th>
+                                实名状态
+                            </th>
+
+                            <th>
+                                账号状态
+                            </th>
+
+                            <th>
+                                音乐人ID
+                            </th>
                         </tr>
                         </thead>
 
                         <tbody>
-                        {users.map((item) => (
-                            <tr key={item.id}>
-                                <td>{item.id}</td>
-                                <td>
-                                    {item.username}
-                                </td>
-                                <td>
-                                    {item.phoneMasked
-                                        ?? "-"}
-                                </td>
-                                <td>{item.role}</td>
-                                <td>
-                                    <Status
-                                        value={
-                                            item.realNameStatus
+                        {users.map(
+                            (item) => {
+
+                                const isSelf =
+                                    item.id
+                                    === currentUserId;
+
+                                const updating =
+                                    roleUpdatingUserId
+                                    === item.id;
+
+                                return (
+                                    <tr
+                                        key={
+                                            item.id
                                         }
-                                        label={
-                                            realNameLabel(
-                                                item.realNameStatus,
-                                            )
-                                        }
-                                    />
-                                </td>
-                                <td>
-                                    <Status
-                                        value={
-                                            item.accountStatus
-                                        }
-                                        label={
-                                            item.accountStatus
-                                            === "ENABLED"
-                                                ? "正常"
-                                                : "禁用"
-                                        }
-                                    />
-                                </td>
-                                <td>
-                                    {item.artistId
-                                        ?? "-"}
-                                </td>
-                            </tr>
-                        ))}
+                                    >
+                                        <td>
+                                            {item.id}
+                                        </td>
+
+                                        <td>
+                                            <div className="management-entity-cell">
+                                                <strong>
+                                                    {item.username}
+                                                </strong>
+
+                                                {isSelf && (
+                                                    <small>
+                                                        当前账号
+                                                    </small>
+                                                )}
+                                            </div>
+                                        </td>
+
+                                        <td>
+                                            {item.phoneMasked
+                                                ?? "-"}
+                                        </td>
+
+                                        <td>
+                                            {canChangeRole
+                                            && !isSelf ? (
+                                                <select
+                                                    className="user-role-select"
+                                                    value={
+                                                        item.role
+                                                    }
+                                                    disabled={
+                                                        updating
+                                                    }
+                                                    onChange={(
+                                                        event,
+                                                    ) =>
+                                                        onRoleChange(
+                                                            item,
+
+                                                            (
+                                                                event.target.value as UserRole
+                                                            ),
+                                                        )
+                                                    }
+                                                >
+                                                    {USER_ROLE_OPTIONS.map(
+                                                        (
+                                                            role,
+                                                        ) => (
+                                                            <option
+                                                                key={
+                                                                    role.value
+                                                                }
+                                                                value={
+                                                                    role.value
+                                                                }
+                                                            >
+                                                                {
+                                                                    role.label
+                                                                }
+                                                            </option>
+                                                        ),
+                                                    )}
+                                                </select>
+                                            ) : (
+                                                <span className={`user-role-badge ${item.role.toLowerCase()}`}>
+                                                        {
+                                                            userRoleLabel(
+                                                                item.role,
+                                                            )
+                                                        }
+                                                    </span>
+                                            )}
+
+                                            {updating && (
+                                                <small className="user-role-updating">
+                                                    正在修改...
+                                                </small>
+                                            )}
+                                        </td>
+
+                                        <td>
+                                            <Status
+                                                value={
+                                                    item.realNameStatus
+                                                }
+                                                label={
+                                                    realNameLabel(
+                                                        item.realNameStatus,
+                                                    )
+                                                }
+                                            />
+                                        </td>
+
+                                        <td>
+                                            <Status
+                                                value={
+                                                    item.accountStatus
+                                                }
+                                                label={
+                                                    item.accountStatus
+                                                    === "ENABLED"
+                                                        ? "正常"
+                                                        : "禁用"
+                                                }
+                                            />
+                                        </td>
+
+                                        <td>
+                                            {item.artistId
+                                                ?? "-"}
+                                        </td>
+                                    </tr>
+                                );
+                            },
+                        )}
                         </tbody>
                     </table>
                 </div>
@@ -1905,9 +2408,9 @@ function AuditSection({
                             key={artist.id}
                             className="management-artist-card"
                         >
-                            <span className="management-artist-avatar">
-                                {artist.name.slice(0, 1)}
-                            </span>
+                            <ArtistCardAvatar
+                                artist={artist}
+                            />
 
                             <div className="management-artist-info">
                                 <h3>{artist.name}</h3>
@@ -1963,6 +2466,7 @@ function SongTable({
                        selectedIds = [],
                        onSelectedIdsChange,
                        onEdit,
+                       onLyrics,
                        onDelete,
                        onReview,
                    }: {
@@ -1972,6 +2476,7 @@ function SongTable({
     selectedIds?: string[];
     onSelectedIdsChange?(ids: string[]): void;
     onEdit?(song: SongManagementItem): void;
+    onLyrics?(song: SongManagementItem): void;
     onDelete?(id: string): void;
     onReview?(
         id: string,
@@ -2021,7 +2526,9 @@ function SongTable({
                     <th>风格</th>
                     <th>审核状态</th>
                     <th>发布状态</th>
-                    {(audit || onEdit || onDelete) && <th>操作</th>}
+                    {(audit || onEdit || onLyrics || onDelete) && (
+                        <th>操作</th>
+                    )}
                 </tr>
                 </thead>
 
@@ -2108,7 +2615,7 @@ function SongTable({
                                     onReview={onReview}
                                 />
                             </td>
-                        ) : (onEdit || onDelete) ? (
+                        ) : (onEdit || onLyrics || onDelete) ? (
                             <td>
                                 <div className="management-table-actions">
                                     {onEdit && (
@@ -2120,6 +2627,18 @@ function SongTable({
                                             }
                                         >
                                             编辑
+                                        </button>
+                                    )}
+
+                                    {onLyrics && (
+                                        <button
+                                            type="button"
+                                            className="management-table-lyrics"
+                                            onClick={() =>
+                                                onLyrics(item)
+                                            }
+                                        >
+                                            歌词
                                         </button>
                                     )}
 

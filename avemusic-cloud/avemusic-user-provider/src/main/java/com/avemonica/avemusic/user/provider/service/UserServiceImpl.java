@@ -7,9 +7,10 @@ import com.avemonica.avemusic.user.api.dto.AuthModels.PasswordLoginRequest;
 import com.avemonica.avemusic.user.api.dto.AuthModels.PhoneLoginRequest;
 import com.avemonica.avemusic.user.api.dto.AuthModels.RegisterRequest;
 import com.avemonica.avemusic.user.api.dto.AuthModels.SendSmsCodeRequest;
+import com.avemonica.avemusic.user.api.dto.UserManagementModels;
 import com.avemonica.avemusic.user.api.enums.UserErrorCode;
 import com.avemonica.avemusic.user.api.service.UserService;
-import com.avemonica.avemusic.user.provider.entity.User;
+import com.avemonica.avemusic.user.provider.entity.UserDO;
 import com.avemonica.avemusic.user.provider.mapper.PermissionMapper;
 import com.avemonica.avemusic.user.provider.mapper.UserMapper;
 import com.avemonica.minirpc.core.exception.RpcBusinessException;
@@ -26,6 +27,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 @MiniRpcService(
@@ -208,7 +210,7 @@ public class UserServiceImpl implements UserService {
                 request.code()
         );
 
-        User user = new User();
+        UserDO user = new UserDO();
         user.setUsername(username);
         user.setPhone(phone);
         user.setPasswordHash(
@@ -268,17 +270,17 @@ public class UserServiceImpl implements UserService {
 
         String account = request.account().trim();
 
-        User user = userMapper.selectOne(
-                new LambdaQueryWrapper<User>()
+        UserDO user = userMapper.selectOne(
+                new LambdaQueryWrapper<UserDO>()
                         .and(wrapper ->
                                 wrapper
                                         .eq(
-                                                User::getUsername,
+                                                UserDO::getUsername,
                                                 account
                                         )
                                         .or()
                                         .eq(
-                                                User::getPhone,
+                                                UserDO::getPhone,
                                                 account
                                         )
                         )
@@ -301,6 +303,7 @@ public class UserServiceImpl implements UserService {
         return toAuthUser(user);
     }
 
+
     @Override
     public AuthUser loginByPhone(
             PhoneLoginRequest request
@@ -320,7 +323,7 @@ public class UserServiceImpl implements UserService {
                 request.code()
         );
 
-        User user = findByPhone(phone);
+        UserDO user = findByPhone(phone);
 
         if (user == null) {
             throw business(
@@ -395,27 +398,27 @@ public class UserServiceImpl implements UserService {
 
     private boolean existsByUsername(String username) {
         return userMapper.exists(
-                new LambdaQueryWrapper<User>()
-                        .eq(User::getUsername, username)
+                new LambdaQueryWrapper<UserDO>()
+                        .eq(UserDO::getUsername, username)
         );
     }
 
     private boolean existsByPhone(String phone) {
         return userMapper.exists(
-                new LambdaQueryWrapper<User>()
-                        .eq(User::getPhone, phone)
+                new LambdaQueryWrapper<UserDO>()
+                        .eq(UserDO::getPhone, phone)
         );
     }
 
-    private User findByPhone(String phone) {
+    private UserDO findByPhone(String phone) {
         return userMapper.selectOne(
-                new LambdaQueryWrapper<User>()
-                        .eq(User::getPhone, phone)
+                new LambdaQueryWrapper<UserDO>()
+                        .eq(UserDO::getPhone, phone)
                         .last("LIMIT 1")
         );
     }
 
-    private static void ensureEnabled(User user) {
+    private static void ensureEnabled(UserDO user) {
         if (!Integer.valueOf(1).equals(
                 user.getStatus()
         )) {
@@ -425,7 +428,7 @@ public class UserServiceImpl implements UserService {
         }
     }
 
-    private AuthUser toAuthUser(User user) {
+    private AuthUser toAuthUser(UserDO user) {
         UserRole role =
                 user.getRole() == null
                         ? UserRole.USER

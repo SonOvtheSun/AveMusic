@@ -12,6 +12,12 @@ import BottomPlayer from "./components/player/BottomPlayer";
 import PlaylistRankingPage
     from "./pages/Playlist/PlaylistRankingPage";
 
+import SearchResultPage
+    from "./pages/Search/SearchResultPage";
+
+import ArtistsPage
+    from "./pages/Artist/ArtistsPage";
+
 /*
  * 播放器样式在 App 顶层统一导入。
  * 不再依赖 BottomPlayer.tsx 自己加载 CSS。
@@ -47,8 +53,20 @@ export default function App() {
                     />
 
                     <Route
+                        path="/artists"
+                        element={<ArtistsPage />}
+                    />
+
+                    <Route
                         path="/albums/:id"
                         element={<AlbumPage />}
+                    />
+
+                    <Route
+                        path="/search"
+                        element={
+                            <SearchResultPage />
+                        }
                     />
 
                     <Route

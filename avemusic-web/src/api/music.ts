@@ -6,6 +6,129 @@ export interface ApiResult<T> {
     data: T;
 }
 
+export type ArtistArea =
+    | "ALL"
+    | "CN"
+    | "EU_US"
+    | "JP"
+    | "KR"
+    | "OTHER";
+
+export type ArtistCategory =
+    | "ALL"
+    | "MALE"
+    | "FEMALE"
+    | "BAND";
+
+export type ArtistInitial =
+    | "HOT"
+    | "A"
+    | "B"
+    | "C"
+    | "D"
+    | "E"
+    | "F"
+    | "G"
+    | "H"
+    | "I"
+    | "J"
+    | "K"
+    | "L"
+    | "M"
+    | "N"
+    | "O"
+    | "P"
+    | "Q"
+    | "R"
+    | "S"
+    | "T"
+    | "U"
+    | "V"
+    | "W"
+    | "X"
+    | "Y"
+    | "Z"
+    | "#";
+
+export interface ArtistDirectoryItem {
+    id: string;
+    name: string;
+    avatarUrl: string | null;
+    songCount: number;
+}
+
+export interface ArtistDirectoryResult {
+    records: ArtistDirectoryItem[];
+    total: number;
+    page: number;
+    pageSize: number;
+}
+
+export interface ArtistDirectoryQuery {
+    area: ArtistArea;
+    category: ArtistCategory;
+    initial: ArtistInitial;
+    page?: number;
+    pageSize?: number;
+}
+
+export async function getArtistDirectory(
+    query: ArtistDirectoryQuery,
+): Promise<ArtistDirectoryResult> {
+
+    const response =
+        await http.get<
+            ApiResult<ArtistDirectoryResult>
+        >(
+            "/music/artists/directory",
+            {
+                params: {
+                    area: query.area,
+                    category: query.category,
+                    initial: query.initial,
+                    page: query.page ?? 1,
+                    pageSize: query.pageSize ?? 10,
+                },
+            },
+        );
+
+    const result =
+        response.data.data;
+
+    return {
+        records:
+            Array.isArray(
+                result.records,
+            )
+                ? result.records.map(
+                    (item) => ({
+                        id: String(
+                            item.id,
+                        ),
+                        name:
+                            item.name ?? "",
+                        avatarUrl:
+                            item.avatarUrl
+                            ?? null,
+                        songCount: Number(
+                            item.songCount
+                            ?? 0,
+                        ),
+                    }),
+                )
+                : [],
+        total: Number(
+            result.total ?? 0,
+        ),
+        page: Number(
+            result.page ?? 1,
+        ),
+        pageSize: Number(
+            result.pageSize ?? 10,
+        ),
+    };
+}
+
 export interface SongLyrics {
     songId: string;
 
@@ -189,6 +312,181 @@ export interface ArtistDetailSong {
     audioUrl: string | null;
     durationSeconds: number;
     playCount: number;
+}
+
+/* ==================== 全局智能搜索 ==================== */
+
+export type SearchItemType =
+    | "SONG"
+    | "ARTIST"
+    | "ALBUM"
+    | "PLAYLIST";
+
+export interface SearchItem {
+    type: SearchItemType;
+
+    id: string;
+
+    name: string;
+
+    /**
+     * SONG     -> 音乐人
+     * ARTIST   -> 译名 / 地区
+     * ALBUM    -> 音乐人
+     * PLAYLIST -> 简介
+     */
+    subtitle: string | null;
+
+    coverUrl: string | null;
+
+    /**
+     * 只有歌曲有。
+     */
+    audioUrl: string | null;
+
+    /**
+     * 只有歌曲有实际意义。
+     */
+    durationSeconds: number;
+
+    /**
+     * SONG     -> playCount
+     * ARTIST   -> followerCount
+     * PLAYLIST -> favoriteCount
+     * ALBUM    -> 可以为0
+     */
+    popularity: number;
+
+    /**
+     * 歌曲对应音乐人。
+     */
+    artistIds: string[];
+}
+
+export interface SearchResult {
+    /**
+     * 用户原始输入。
+     */
+    keyword: string;
+
+    /**
+     * AI 根据用户输入扩展出的关键词。
+     */
+    expandedKeywords: string[];
+
+    songs: SearchItem[];
+
+    artists: SearchItem[];
+
+    albums: SearchItem[];
+
+    playlists: SearchItem[];
+}
+
+function normalizeSearchItem(
+    item: SearchItem,
+): SearchItem {
+    return {
+        ...item,
+
+        subtitle:
+            item.subtitle
+            ?? null,
+
+        coverUrl:
+            item.coverUrl
+            ?? null,
+
+        audioUrl:
+            item.audioUrl
+            ?? null,
+
+        durationSeconds:
+            Number(
+                item.durationSeconds
+                ?? 0,
+            ),
+
+        popularity:
+            Number(
+                item.popularity
+                ?? 0,
+            ),
+
+        artistIds:
+            Array.isArray(
+                item.artistIds,
+            )
+                ? item.artistIds
+                : [],
+    };
+}
+
+export async function globalSearch(
+    keyword: string,
+    signal?: AbortSignal,
+): Promise<SearchResult> {
+
+    const response =
+        await http.get<
+            ApiResult<SearchResult>
+        >(
+            "/music/search",
+            {
+                params: {
+                    keyword,
+                    limit: 8,
+                },
+
+                signal,
+
+                /*
+                 * 搜索里面包含本地 AI 推理，
+                 * 比普通数据库接口稍微宽松一些。
+                 */
+                timeout: 15_000,
+            },
+        );
+
+    const result =
+        response.data.data;
+
+    return {
+        keyword:
+            result.keyword
+            ?? keyword,
+
+        expandedKeywords:
+            Array.isArray(
+                result.expandedKeywords,
+            )
+                ? result.expandedKeywords
+                : [],
+
+        songs:
+            (result.songs ?? [])
+                .map(
+                    normalizeSearchItem,
+                ),
+
+        artists:
+            (result.artists ?? [])
+                .map(
+                    normalizeSearchItem,
+                ),
+
+        albums:
+            (result.albums ?? [])
+                .map(
+                    normalizeSearchItem,
+                ),
+
+        playlists:
+            (result.playlists ?? [])
+                .map(
+                    normalizeSearchItem,
+                ),
+    };
 }
 
 export interface ArtistDetailAlbum {

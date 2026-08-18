@@ -2,6 +2,11 @@ avemusic:
   lyrics:
     lrclib-base-url: https://lrclib.net
 
+  netease:
+    enabled: true
+    base-url: http://127.0.0.1:3000
+    search-limit: 15
+
   ai:
     ollama:
       base-url: http://127.0.0.1:11434

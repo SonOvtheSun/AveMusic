@@ -25,18 +25,25 @@ import com.avemonica.avemusic.music.api.dto.MusicManagementModels.UpdateAlbumReq
 import com.avemonica.avemusic.music.api.dto.MusicManagementModels.ReviewRequest;
 import com.avemonica.avemusic.music.api.dto.MusicManagementModels.SongItem;
 import com.avemonica.avemusic.music.api.dto.MusicManagementModels.PageResult;
+import com.avemonica.avemusic.music.api.dto.MusicModels;
+import com.avemonica.avemusic.music.api.dto.MusicModels.ArtistDirectoryItem;
+import com.avemonica.avemusic.music.api.dto.MusicModels.ArtistDirectoryResult;
+import com.avemonica.avemusic.music.api.dto.MusicModels.SearchItem;
+import com.avemonica.avemusic.music.api.dto.MusicModels.SearchResult;
 import com.avemonica.avemusic.music.api.dto.MusicModels.ArtistCard;
 import com.avemonica.avemusic.music.api.dto.MusicModels.SongCard;
+import com.avemonica.avemusic.music.provider.util.ArtistAreaUtil;
+import com.github.houbb.opencc4j.util.ZhConverterUtil;
+import com.github.houbb.opencc4j.util.ZhJpConverterUtil;
+import com.avemonica.avemusic.music.api.dto.MusicModels.SearchResult;
 import com.avemonica.avemusic.music.api.enums.MusicErrorCode;
 import com.avemonica.avemusic.music.api.service.MusicService;
+import com.avemonica.avemusic.music.provider.client.OllamaClient;
 import com.avemonica.avemusic.music.provider.entity.AlbumDO;
 import com.avemonica.avemusic.music.provider.entity.ArtistDO;
 import com.avemonica.avemusic.music.provider.entity.SongArtistDO;
 import com.avemonica.avemusic.music.provider.entity.SongDO;
-import com.avemonica.avemusic.music.provider.mapper.AlbumMapper;
-import com.avemonica.avemusic.music.provider.mapper.ArtistMapper;
-import com.avemonica.avemusic.music.provider.mapper.SongArtistMapper;
-import com.avemonica.avemusic.music.provider.mapper.SongMapper;
+import com.avemonica.avemusic.music.provider.mapper.*;
 import com.avemonica.avemusic.music.provider.util.ArtistInitialUtil;
 import com.avemonica.minirpc.core.exception.RpcBusinessException;
 import com.avemonica.minirpc.spring.annotation.MiniRpcService;
@@ -81,21 +88,47 @@ public class MusicServiceImpl
     private static final int MAX_ARTIST_LIMIT =
             20;
 
+    private static final Set<String>
+            ARTIST_AREAS =
+            Set.of(
+                    "ALL",
+                    "CN",
+                    "EU_US",
+                    "JP",
+                    "KR",
+                    "OTHER"
+            );
+
+    private static final Set<String>
+            ARTIST_CATEGORIES =
+            Set.of(
+                    "ALL",
+                    "MALE",
+                    "FEMALE",
+                    "BAND"
+            );
+
     private final SongMapper songMapper;
     private final AlbumMapper albumMapper;
     private final ArtistMapper artistMapper;
     private final SongArtistMapper songArtistMapper;
+    private final PlaylistMapper playlistMapper;
+    private final OllamaClient ollamaClient;
 
     public MusicServiceImpl(
             SongMapper songMapper,
             AlbumMapper albumMapper,
             ArtistMapper artistMapper,
-            SongArtistMapper songArtistMapper
+            SongArtistMapper songArtistMapper,
+            PlaylistMapper playlistMapper,
+            OllamaClient ollamaClient
     ) {
         this.songMapper = songMapper;
         this.albumMapper = albumMapper;
         this.artistMapper = artistMapper;
         this.songArtistMapper = songArtistMapper;
+        this.playlistMapper = playlistMapper;
+        this.ollamaClient = ollamaClient;
     }
 
     @Override
@@ -225,6 +258,141 @@ public class MusicServiceImpl
                         total,
                         resolvedSize
                 )
+        );
+    }
+
+    @Override
+    public SearchResult search(
+            String keyword,
+            int limit
+    ) {
+        String normalized =
+                requiredText(
+                        keyword,
+                        "搜索内容不能为空"
+                );
+
+        if (
+                normalized.length()
+                        > 64
+        ) {
+            throw new RpcBusinessException(
+                    MusicErrorCode
+                            .INVALID_PARAMETER,
+                    "搜索内容不能超过64个字符"
+            );
+        }
+
+        int resolvedLimit =
+                resolveLimit(
+                        limit,
+                        5,
+                        8
+                );
+
+        List<String> expanded =
+                ollamaClient
+                        .expandSearchKeywords(
+                                normalized
+                        );
+
+        LinkedHashMap<
+                String,
+                String
+                > unique =
+                new LinkedHashMap<>();
+
+        /*
+         * 原始搜索词：
+         * 同时加入原文 + 简体 + 繁体。
+         */
+        addSearchKeywordWithCjkVariants(
+                unique,
+                normalized
+        );
+
+        /*
+         * AI 扩展出来的每一个搜索词，
+         * 同样补齐简繁体。
+         */
+        for (
+                String value
+                : expanded
+        ) {
+            addSearchKeywordWithCjkVariants(
+                    unique,
+                    normalized
+            );
+        }
+
+        List<String> keywords =
+                List.copyOf(
+                        unique.values()
+                );
+
+        System.out.println(
+                "[Search] keyword="
+                        + normalized
+                        + ", keywords="
+                        + keywords
+        );
+
+        return new SearchResult(
+                normalized,
+
+                expanded,
+
+                songMapper
+                        .searchPublic(
+                                keywords,
+                                normalized,
+                                resolvedLimit
+                        )
+                        .stream()
+                        .map(
+                                MusicServiceImpl
+                                        ::toSongGlobalSearchItem
+                        )
+                        .toList(),
+
+                artistMapper
+                        .searchPublic(
+                                keywords,
+                                normalized,
+                                resolvedLimit
+                        )
+                        .stream()
+                        .map(
+                                MusicServiceImpl
+                                        ::toArtistGlobalSearchItem
+                        )
+                        .toList(),
+
+                albumMapper
+                        .searchPublic(
+                                keywords,
+                                normalized,
+                                resolvedLimit
+                        )
+                        .stream()
+                        .map(
+                                MusicServiceImpl
+                                        ::toAlbumGlobalSearchItem
+                        )
+                        .toList(),
+
+                playlistMapper
+                        .searchPublic(
+                                keywords,
+                                normalized,
+                                resolvedLimit
+                        )
+                        .stream()
+                        .map(
+                                MusicServiceImpl
+                                        ::toPlaylistGlobalSearchItem
+                        )
+                        .toList()
         );
     }
 
@@ -641,6 +809,11 @@ public class MusicServiceImpl
         artist.setCountryRegion(
                 countryRegion
         );
+        artist.setAreaCode(
+                ArtistAreaUtil.resolve(
+                        countryRegion
+                )
+        );
         artist.setStyle(
                 nullableText(request.style())
         );
@@ -747,16 +920,44 @@ public class MusicServiceImpl
                         request.translatedNames()
                 )
         );
-        artist.setCountryRegion(countryRegion);
-        artist.setStyle(nullableText(request.style()));
+        artist.setCountryRegion(
+                countryRegion
+        );
+
+        artist.setAreaCode(
+                ArtistAreaUtil.resolve(
+                        countryRegion
+                )
+        );
+
+        artist.setArtistType(
+                normalizeArtistType(
+                        request.artistType()
+                )
+        );
+
+        artist.setStyle(
+                nullableText(
+                        request.style()
+                )
+        );
+
         artist.setIntroduction(
-                nullableText(request.introduction())
+                nullableText(
+                        request.introduction()
+                )
         );
+
         artist.setAvatarUrl(
-                nullableText(request.avatarUrl())
+                nullableText(
+                        request.avatarUrl()
+                )
         );
+
         artist.setNameInitial(
-                ArtistInitialUtil.resolve(name)
+                ArtistInitialUtil.resolve(
+                        name
+                )
         );
 
         boolean directApprove =
@@ -776,6 +977,91 @@ public class MusicServiceImpl
 
         artistMapper.updateById(artist);
         return findArtistItem(artistId);
+    }
+
+    @Override
+    public ArtistDirectoryResult listArtists(
+            String area,
+            String category,
+            String initial,
+            int page,
+            int pageSize
+    ) {
+        String resolvedArea =
+                normalizeArtistArea(
+                        area
+                );
+
+        String resolvedCategory =
+                normalizeArtistCategory(
+                        category
+                );
+
+        String resolvedInitial =
+                normalizeArtistInitial(
+                        initial
+                );
+
+        int resolvedPage =
+                Math.max(
+                        page,
+                        1
+                );
+
+        int resolvedPageSize =
+                Math.max(
+                        1,
+                        Math.min(
+                                pageSize,
+                                50
+                        )
+                );
+
+        int offset =
+                (resolvedPage - 1)
+                        * resolvedPageSize;
+
+        long total =
+                artistMapper
+                        .countPublicArtistDirectory(
+                                resolvedArea,
+                                resolvedCategory,
+                                resolvedInitial
+                        );
+
+        if (total <= 0) {
+
+            return new ArtistDirectoryResult(
+                    List.of(),
+                    0,
+                    resolvedPage,
+                    resolvedPageSize
+            );
+        }
+
+        List<ArtistDirectoryItem>
+                records =
+                artistMapper
+                        .selectPublicArtistDirectory(
+                                resolvedArea,
+                                resolvedCategory,
+                                resolvedInitial,
+                                offset,
+                                resolvedPageSize
+                        )
+                        .stream()
+                        .map(
+                                MusicServiceImpl
+                                        ::toArtistDirectoryItem
+                        )
+                        .toList();
+
+        return new ArtistDirectoryResult(
+                records,
+                total,
+                resolvedPage,
+                resolvedPageSize
+        );
     }
 
     @Override
@@ -1787,6 +2073,33 @@ public class MusicServiceImpl
         }
     }
 
+    private static String normalizeArtistType(
+            String value
+    ) {
+        String result =
+                requiredText(
+                        value,
+                        "请选择音乐人类型"
+                )
+                        .trim()
+                        .toUpperCase(
+                                Locale.ROOT
+                        );
+
+        if (
+                !"MALE".equals(result)
+                        && !"FEMALE".equals(result)
+                        && !"BAND".equals(result)
+        ) {
+            throw new RpcBusinessException(
+                    MusicErrorCode.INVALID_PARAMETER,
+                    "音乐人类型只能是MALE、FEMALE或BAND"
+            );
+        }
+
+        return result;
+    }
+
     private void replaceAlbumArtists(
             Long albumId,
             List<Long> artistIds
@@ -2025,6 +2338,162 @@ public class MusicServiceImpl
         };
     }
 
+    /**
+     * 加入搜索词及常见 CJK 字形变体。
+     *
+     * 例如：
+     *
+     * 音樂
+     * ->
+     * 音樂
+     * 音乐
+     * 音楽
+     *
+     *
+     * 音楽
+     * ->
+     * 音楽
+     * 音樂
+     * 音乐
+     *
+     *
+     * 龍
+     * ->
+     * 龍
+     * 龙
+     * 竜
+     *
+     *
+     * 竜
+     * ->
+     * 竜
+     * 龍
+     * 龙
+     *
+     * 注意：
+     * 这些只是搜索候选词，
+     * 绝不会替换用户原始搜索词。
+     */
+    private static void
+    addSearchKeywordWithCjkVariants(
+            Map<String, String> values,
+            String value
+    ) {
+        if (
+                values == null
+                        || value == null
+        ) {
+            return;
+        }
+
+        String normalized =
+                value.trim();
+
+        if (
+                normalized.isEmpty()
+                        || normalized.length() > 64
+        ) {
+            return;
+        }
+
+        /*
+         * ① 原始形式永远保留。
+         */
+        addSearchKeyword(
+                values,
+                normalized
+        );
+
+        try {
+
+            /*
+             * ② 中文简体。
+             *
+             * 音樂 -> 音乐
+             * 音楽 -> 有机会转成对应中文形式
+             */
+            addSearchKeyword(
+                    values,
+
+                    ZhConverterUtil
+                            .toSimple(
+                                    normalized
+                            )
+            );
+
+            /*
+             * ③ 中文标准繁体。
+             *
+             * 音乐 -> 音樂
+             */
+            addSearchKeyword(
+                    values,
+
+                    ZhConverterUtil
+                            .toTraditional(
+                                    normalized
+                            )
+            );
+
+            /*
+             * ④ 日文新字体。
+             *
+             * opencc4j 的这个方法名虽然叫
+             * toTraditional，
+             * 但 ZhJpConverterUtil 的语义是：
+             *
+             * 中文简体
+             *   ↓
+             * 标准繁体
+             *   ↓
+             * 日文新字体
+             *
+             * 例如：
+             *
+             * 音乐 -> 音楽
+             * 龙   -> 竜
+             */
+            addSearchKeyword(
+                    values,
+
+                    ZhJpConverterUtil
+                            .toTraditional(
+                                    normalized
+                            )
+            );
+
+            /*
+             * ⑤ 日文新字体 -> 中文简体。
+             *
+             * 例如：
+             *
+             * 音楽 -> 音乐
+             * 竜   -> 龙
+             */
+            addSearchKeyword(
+                    values,
+
+                    ZhJpConverterUtil
+                            .toSimple(
+                                    normalized
+                            )
+            );
+
+        } catch (Exception exception) {
+
+            /*
+             * 字形转换只能增强搜索，
+             * 绝不能因为转换失败导致搜索失败。
+             */
+            System.err.println(
+                    "[Search-CJK] 字形扩展失败："
+                            + normalized
+                            + ", error="
+                            + exception.getMessage()
+            );
+        }
+    }
+
     private boolean validateCreatableArtists(
             List<Long> artistIds
     ) {
@@ -2097,6 +2566,172 @@ public class MusicServiceImpl
         }
 
         return toAlbumItem(row);
+    }
+
+    private static String normalizeArtistArea(
+            String value
+    ) {
+        String result =
+                value == null
+                        ? "ALL"
+                        : value
+                        .trim()
+                        .toUpperCase(
+                                Locale.ROOT
+                        );
+
+        if (
+                !ARTIST_AREAS
+                        .contains(
+                                result
+                        )
+        ) {
+            throw new RpcBusinessException(
+                    MusicErrorCode
+                            .INVALID_PARAMETER,
+                    "非法歌手地区分类"
+            );
+        }
+
+        return result;
+    }
+
+
+    private static String normalizeArtistCategory(
+            String value
+    ) {
+        String result =
+                value == null
+                        ? "ALL"
+                        : value
+                        .trim()
+                        .toUpperCase(
+                                Locale.ROOT
+                        );
+
+        if (
+                !ARTIST_CATEGORIES
+                        .contains(
+                                result
+                        )
+        ) {
+            throw new RpcBusinessException(
+                    MusicErrorCode
+                            .INVALID_PARAMETER,
+                    "非法歌手类型"
+            );
+        }
+
+        return result;
+    }
+
+
+    private static String normalizeArtistInitial(
+            String value
+    ) {
+        String result =
+                value == null
+                        ? "HOT"
+                        : value
+                        .trim()
+                        .toUpperCase(
+                                Locale.ROOT
+                        );
+
+        if ("HOT".equals(result)) {
+            return result;
+        }
+
+        if ("#".equals(result)) {
+            return result;
+        }
+
+        if (
+                result.length() == 1
+                        && result.charAt(0)
+                        >= 'A'
+                        && result.charAt(0)
+                        <= 'Z'
+        ) {
+            return result;
+        }
+
+        throw new RpcBusinessException(
+                MusicErrorCode
+                        .INVALID_PARAMETER,
+                "非法歌手首字母"
+        );
+    }
+
+    private static ArtistDirectoryItem
+    toArtistDirectoryItem(
+            Map<String, Object> row
+    ) {
+        return new ArtistDirectoryItem(
+                text(
+                        row,
+                        "artistId"
+                ),
+
+                text(
+                        row,
+                        "artistName"
+                ),
+
+                nullableText(
+                        row,
+                        "avatarUrl"
+                ),
+
+                longValue(
+                        row,
+                        "songCount"
+                )
+        );
+    }
+
+    private static void addSearchKeyword(
+            Map<String, String> values,
+            String value
+    ) {
+        if (
+                values == null
+                        || value == null
+        ) {
+            return;
+        }
+
+        String normalized =
+                value.trim();
+
+        if (
+                normalized.isEmpty()
+                        || normalized.length() > 64
+        ) {
+            return;
+        }
+
+        /*
+         * 英文大小写视为同一个关键词。
+         *
+         * 例如：
+         *
+         * MyGO
+         * mygo
+         * MYGO
+         *
+         * 最终只保留第一次出现的一个。
+         */
+        String key =
+                normalized
+                        .toLowerCase(
+                                Locale.ROOT
+                        );
+
+        values.putIfAbsent(
+                key,
+                normalized
+        );
     }
 
     private SongItem findSongItem(
@@ -2483,6 +3118,7 @@ public class MusicServiceImpl
                 jsonStringList(row, "translatedNames"),
                 nullableText(row, "ownerUserId"),
                 nullableText(row, "countryRegion"),
+                nullableText(row, "artistType"),
                 nullableText(row, "style"),
                 nullableText(row, "avatarUrl"),
                 nullableText(row, "introduction"),
@@ -2609,6 +3245,104 @@ public class MusicServiceImpl
         );
     }
 
+    private static SearchItem
+    toSongGlobalSearchItem(
+            Map<String, Object> row
+    ) {
+        return toGlobalSearchItem(
+                row,
+                "SONG"
+        );
+    }
+
+
+    private static SearchItem
+    toArtistGlobalSearchItem(
+            Map<String, Object> row
+    ) {
+        return toGlobalSearchItem(
+                row,
+                "ARTIST"
+        );
+    }
+
+
+    private static SearchItem
+    toAlbumGlobalSearchItem(
+            Map<String, Object> row
+    ) {
+        return toGlobalSearchItem(
+                row,
+                "ALBUM"
+        );
+    }
+
+
+    private static SearchItem
+    toPlaylistGlobalSearchItem(
+            Map<String, Object> row
+    ) {
+        return toGlobalSearchItem(
+                row,
+                "PLAYLIST"
+        );
+    }
+
+
+    /**
+     * 四种搜索结果使用完全相同的 SQL 字段别名，
+     * 所以这里可以共用一个转换方法。
+     */
+    private static SearchItem
+    toGlobalSearchItem(
+            Map<String, Object> row,
+            String type
+    ) {
+        return new SearchItem(
+                type,
+
+                text(
+                        row,
+                        "id"
+                ),
+
+                text(
+                        row,
+                        "name"
+                ),
+
+                nullableText(
+                        row,
+                        "subtitle"
+                ),
+
+                nullableText(
+                        row,
+                        "coverUrl"
+                ),
+
+                nullableText(
+                        row,
+                        "audioUrl"
+                ),
+
+                intValue(
+                        row,
+                        "durationSeconds"
+                ),
+
+                longValue(
+                        row,
+                        "popularity"
+                ),
+
+                csvList(
+                        row,
+                        "artistIds"
+                )
+        );
+    }
+
     private record ResolvedActor(
             Long userId,
             UserRole role
@@ -2620,6 +3354,8 @@ public class MusicServiceImpl
         REJECT,
         REVOKE
     }
+
+
 
     private record ResolvedReview(
             Long id,

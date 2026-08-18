@@ -1,9 +1,16 @@
 import {
+    useEffect,
+    useState,
+    type FormEvent,
+} from "react";
+
+import {
     useLocation,
     useNavigate,
 } from "react-router-dom";
 
 import { useAuth } from "../context/useAuth";
+
 import "../styles/components/Header.css";
 
 interface NavItem {
@@ -43,6 +50,9 @@ export default function Header() {
     const pathname =
         location.pathname;
 
+    const [searchKeyword, setSearchKeyword] =
+        useState("");
+
 
     const activeNav =
         pathname.startsWith(
@@ -68,6 +78,54 @@ export default function Header() {
     const showSubNav =
         activeNav === "发现音乐";
 
+    useEffect(() => {
+
+        if (
+            !location.pathname
+                .startsWith(
+                    "/search",
+                )
+        ) {
+            return;
+        }
+
+        const params =
+            new URLSearchParams(
+                location.search,
+            );
+
+        setSearchKeyword(
+            params.get("keyword")
+            ?? "",
+        );
+
+    }, [
+        location.pathname,
+        location.search,
+    ]);
+
+    function handleSearchSubmit(
+        event:
+        FormEvent<HTMLFormElement>,
+    ): void {
+
+        event.preventDefault();
+
+        const keyword =
+            searchKeyword.trim();
+
+        if (keyword.length === 0) {
+            return;
+        }
+
+        navigate(
+            `/search?keyword=${
+                encodeURIComponent(
+                    keyword,
+                )
+            }`,
+        );
+    }
 
     function handleNavClick(
         item: NavItem,
@@ -143,10 +201,42 @@ export default function Header() {
                     </nav>
 
                     <div className="header-actions">
-                        <input
-                            className="header-search"
-                            placeholder="搜索歌曲 / 歌手 / 专辑"
-                        />
+                        <form
+                            className="header-search-form"
+                            onSubmit={
+                                handleSearchSubmit
+                            }
+                        >
+                            <input
+                                className="header-search"
+                                value={
+                                    searchKeyword
+                                }
+                                maxLength={64}
+                                autoComplete="off"
+                                placeholder={
+                                    "搜索歌曲 / 歌手 / 专辑 / 歌单"
+                                }
+                                aria-label="全局搜索"
+                                onChange={(event) =>
+                                    setSearchKeyword(
+                                        event.target.value,
+                                    )
+                                }
+                            />
+
+                            <button
+                                type="submit"
+                                className="header-search-button"
+                                disabled={
+                                    searchKeyword
+                                        .trim()
+                                        .length === 0
+                                }
+                            >
+                                搜索
+                            </button>
+                        </form>
 
                         {loading && (
                             <div
@@ -272,7 +362,16 @@ export default function Header() {
 
                     <button
                         type="button"
-                        className="header-sub-item"
+                        className={
+                        pathname.startsWith(
+                            "/artists"
+                        )
+                            ? "header-sub-item active"
+                            : "header-sub-item"
+                    }
+                        onClick={() =>
+                            navigate("/artists"
+                            )}
                     >
                         歌手
                     </button>

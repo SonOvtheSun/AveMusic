@@ -377,8 +377,11 @@ export default function PlaylistDetailPage() {
     }
 
     async function toggleFavorite():
-            Promise<void> {
-        if (isOwner) {
+        Promise<void> {
+        if (
+            isOwner
+            || detail === null
+        ) {
             return;
         }
 

@@ -42,7 +42,19 @@ public enum UserErrorCode implements RpcErrorCode {
     USER_DISABLED(
             "AUTH-1005",
             "该账号已被禁用"
+    ),
+
+    FORBIDDEN(
+            "AUTH-1006",
+            "禁止"
+    ),
+
+    USER_NOT_FOUND(
+            "AUTH-1007",
+                    "未找到账号"
     );
+
+
 
     private final String code;
     private final String defaultMessage;

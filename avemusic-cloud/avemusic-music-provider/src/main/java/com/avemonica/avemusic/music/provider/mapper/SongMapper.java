@@ -528,4 +528,211 @@ public interface SongMapper
             Long songId
     );
 
+    @Select("""
+        SELECT
+            song.name AS songName,
+
+            COALESCE(
+                (
+                    SELECT GROUP_CONCAT(
+                        DISTINCT artist.name
+                        ORDER BY artist.name
+                        SEPARATOR ' / '
+                    )
+                    FROM song_artist_tb relation
+                    INNER JOIN singer_tb artist
+                        ON artist.id =
+                           relation.artist_id
+                    WHERE relation.song_id =
+                          song.id
+                ),
+                ''
+            ) AS artistName,
+
+            album.name AS albumName,
+
+            song.duration_seconds
+                AS durationSeconds
+
+        FROM song_tb song
+
+        LEFT JOIN album_tb album
+            ON album.id =
+               song.album_id
+
+        WHERE song.id =
+              #{songId}
+
+        LIMIT 1
+        """)
+    Map<String, Object>
+    selectLyricsManagementMeta(
+            @Param("songId")
+            Long songId
+    );
+
+    @Select("""
+        <script>
+
+        SELECT
+            CAST(song.id AS CHAR)
+                AS id,
+
+            song.name
+                AS name,
+
+            COALESCE(
+                GROUP_CONCAT(
+                    DISTINCT artist.name
+                    ORDER BY artist.name
+                    SEPARATOR ' / '
+                ),
+                '未知音乐人'
+            ) AS subtitle,
+
+            song.cover_url
+                AS coverUrl,
+
+            song.audio_url
+                AS audioUrl,
+
+            song.duration_seconds
+                AS durationSeconds,
+
+            COALESCE(
+                song.play_count,
+                0
+            ) AS popularity,
+
+            COALESCE(
+                GROUP_CONCAT(
+                    DISTINCT CAST(
+                        artist.id AS CHAR
+                    )
+                    ORDER BY artist.name
+                    SEPARATOR ','
+                ),
+                ''
+            ) AS artistIds
+
+        FROM song_tb song
+
+        LEFT JOIN song_artist_tb relation
+            ON relation.song_id =
+               song.id
+
+        LEFT JOIN singer_tb artist
+            ON artist.id =
+               relation.artist_id
+
+        LEFT JOIN album_tb album
+            ON album.id =
+               song.album_id
+
+        WHERE
+            song.audit_status =
+                'APPROVED'
+
+            AND song.status = 1
+
+            AND song.audio_url
+                IS NOT NULL
+
+            AND song.audio_url
+                &lt;&gt; ''
+
+            AND (
+                <foreach
+                    collection="keywords"
+                    item="keyword"
+                    separator=" OR "
+                >
+
+                    (
+                        song.name LIKE
+                            CONCAT(
+                                '%',
+                                #{keyword},
+                                '%'
+                            )
+
+                        OR artist.name LIKE
+                            CONCAT(
+                                '%',
+                                #{keyword},
+                                '%'
+                            )
+
+                        OR artist.translated_name LIKE
+                            CONCAT(
+                                '%',
+                                #{keyword},
+                                '%'
+                            )
+
+                        OR album.name LIKE
+                            CONCAT(
+                                '%',
+                                #{keyword},
+                                '%'
+                            )
+                    )
+
+                </foreach>
+            )
+
+        GROUP BY
+            song.id,
+            song.name,
+            song.cover_url,
+            song.audio_url,
+            song.duration_seconds,
+            song.play_count
+
+        ORDER BY
+
+            CASE
+
+                WHEN song.name =
+                        #{originalKeyword}
+                    THEN 0
+
+                WHEN song.name LIKE
+                        CONCAT(
+                            #{originalKeyword},
+                            '%'
+                        )
+                    THEN 1
+
+                WHEN song.name LIKE
+                        CONCAT(
+                            '%',
+                            #{originalKeyword},
+                            '%'
+                        )
+                    THEN 2
+
+                ELSE 3
+
+            END,
+
+            song.play_count DESC,
+            song.id DESC
+
+        LIMIT #{limit}
+
+        </script>
+        """)
+    List<Map<String, Object>>
+    searchPublic(
+            @Param("keywords")
+            List<String> keywords,
+
+            @Param("originalKeyword")
+            String originalKeyword,
+
+            @Param("limit")
+            int limit
+    );
+
 }

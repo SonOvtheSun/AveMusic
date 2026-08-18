@@ -1,0 +1,805 @@
+.search-page-shell {
+    min-height: 100vh;
+    background: #f6f7fa;
+}
+
+.search-page {
+    width: 1180px;
+    max-width: calc(100% - 40px);
+
+    margin: 0 auto;
+    padding: 38px 0 100px;
+}
+
+/* =========================
+   搜索标题
+   ========================= */
+
+.search-heading {
+    margin-bottom: 18px;
+}
+
+.search-heading h1 {
+    margin: 0;
+
+    color: #202938;
+    font-size: 30px;
+    font-weight: 700;
+}
+
+.search-ai-hint {
+    min-height: 28px;
+    margin-top: 10px;
+
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+
+    color: #8b95a5;
+    font-size: 12px;
+}
+
+.search-ai-hint > span {
+    color: #9ca4b1;
+}
+
+.search-ai-hint button {
+    padding: 3px 9px;
+
+    border: 0;
+    border-radius: 12px;
+
+    color: #687386;
+    font-size: 12px;
+
+    background: #eceff4;
+    cursor: pointer;
+}
+
+.search-ai-hint button:hover {
+    color: #c20c0c;
+    background: #f7eaea;
+}
+
+/* =========================
+   Tab
+   ========================= */
+
+.search-tabs {
+    height: 54px;
+
+    display: flex;
+    align-items: flex-end;
+    gap: 34px;
+
+    margin-bottom: 42px;
+}
+
+.search-tabs button {
+    position: relative;
+
+    height: 54px;
+    padding: 0 2px;
+
+    border: 0;
+
+    color: #7b8494;
+    font-size: 16px;
+
+    background: transparent;
+    cursor: pointer;
+}
+
+.search-tabs button small {
+    margin-left: 5px;
+
+    color: #b1b8c2;
+    font-size: 11px;
+}
+
+.search-tabs button:hover {
+    color: #28364b;
+}
+
+.search-tabs button.active {
+    color: #202938;
+    font-weight: 700;
+}
+
+.search-tabs button.active::after {
+    content: "";
+
+    position: absolute;
+
+    left: 50%;
+    bottom: 3px;
+
+    width: 22px;
+    height: 3px;
+
+    border-radius: 999px;
+
+    background: #e8303d;
+
+    transform:
+            translateX(-50%);
+}
+
+/* =========================
+   综合
+   ========================= */
+
+.search-overview {
+    display: flex;
+    flex-direction: column;
+    gap: 48px;
+}
+
+/* =========================
+   主歌手
+   ========================= */
+
+.search-primary-artist {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+
+    min-height: 112px;
+}
+
+.search-primary-artist > img {
+    width: 86px;
+    height: 86px;
+
+    flex: 0 0 86px;
+
+    border-radius: 50%;
+
+    object-fit: cover;
+
+    box-shadow:
+            0 5px 18px
+            rgba(33, 43, 58, 0.1);
+
+    cursor: pointer;
+}
+
+.search-primary-artist-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+.search-primary-artist-info > span {
+    color: #8b95a5;
+    font-size: 13px;
+}
+
+.search-primary-artist-info > button {
+    padding: 0;
+
+    border: 0;
+
+    color: #202938;
+    font-size: 21px;
+    font-weight: 700;
+
+    background: transparent;
+    cursor: pointer;
+}
+
+.search-primary-artist-info > button:hover {
+    color: #c20c0c;
+}
+
+.search-primary-artist-info p {
+    margin: 0;
+
+    color: #7e8898;
+    font-size: 13px;
+}
+
+.search-primary-artist-info small {
+    color: #949dac;
+    font-size: 12px;
+}
+
+/* =========================
+   Section
+   ========================= */
+
+.search-section {
+    min-width: 0;
+}
+
+.search-section-heading {
+    min-height: 36px;
+    margin-bottom: 17px;
+
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.search-section-heading > button:first-child {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+
+    padding: 0;
+
+    border: 0;
+
+    color: #202938;
+    font-size: 20px;
+    font-weight: 700;
+
+    background: transparent;
+    cursor: pointer;
+}
+
+.search-section-heading > button:first-child span {
+    color: #7e8795;
+    font-size: 25px;
+    font-weight: 400;
+}
+
+.search-section-heading > button:first-child:hover {
+    color: #c20c0c;
+}
+
+.search-play-all {
+    height: 30px;
+    padding: 0 13px;
+
+    border: 1px solid #dde1e7;
+    border-radius: 16px;
+
+    color: #5f6979;
+    font-size: 12px;
+
+    background: #ffffff;
+    cursor: pointer;
+}
+
+.search-play-all:hover {
+    color: #c20c0c;
+    border-color: #e8a4a4;
+}
+
+/* =========================
+   单曲
+   ========================= */
+
+.search-song-grid {
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            2,
+            minmax(
+                    0,
+                    1fr
+            )
+        );
+
+    column-gap: 64px;
+    row-gap: 13px;
+}
+
+.search-song-grid.full {
+    row-gap: 10px;
+}
+
+.search-song-row {
+    min-width: 0;
+    height: 76px;
+
+    display: flex;
+    align-items: center;
+    gap: 14px;
+
+    padding: 6px 8px;
+
+    border-radius: 9px;
+
+    transition:
+            background 0.15s ease;
+}
+
+.search-song-row:hover {
+    background:
+            rgba(
+                    255,
+                    255,
+                    255,
+                    0.85
+            );
+}
+
+.search-song-cover {
+    position: relative;
+
+    width: 62px;
+    height: 62px;
+
+    flex: 0 0 62px;
+
+    padding: 0;
+
+    overflow: hidden;
+
+    border: 0;
+    border-radius: 8px;
+
+    background: #e9edf2;
+    cursor: pointer;
+}
+
+.search-song-cover img {
+    width: 100%;
+    height: 100%;
+
+    object-fit: cover;
+}
+
+.search-song-play {
+    position: absolute;
+
+    inset: 0;
+
+    display: grid;
+    place-items: center;
+
+    color: #ffffff;
+    font-size: 19px;
+
+    background:
+            rgba(
+                    0,
+                    0,
+                    0,
+                    0.34
+            );
+
+    opacity: 0;
+
+    transition:
+            opacity 0.15s ease;
+}
+
+.search-song-cover:hover
+.search-song-play {
+    opacity: 1;
+}
+
+.search-song-info {
+    min-width: 0;
+    flex: 1;
+
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.search-song-name {
+    max-width: 100%;
+
+    padding: 0;
+
+    overflow: hidden;
+
+    border: 0;
+
+    color: #303a4a;
+    font-size: 14px;
+    text-align: left;
+
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    background: transparent;
+    cursor: pointer;
+}
+
+.search-song-name:hover {
+    color: #c20c0c;
+}
+
+.search-song-meta {
+    overflow: hidden;
+
+    color: #8892a2;
+    font-size: 12px;
+
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.search-song-duration {
+    flex: 0 0 auto;
+
+    color: #a2a9b4;
+    font-size: 11px;
+}
+
+/* =========================
+   专辑 / 歌单卡片
+   ========================= */
+
+.search-card-grid {
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            6,
+            minmax(
+                    0,
+                    1fr
+            )
+        );
+
+    gap: 23px;
+}
+
+.search-card-grid.large {
+    grid-template-columns:
+        repeat(
+            5,
+            minmax(
+                    0,
+                    1fr
+            )
+        );
+
+    row-gap: 35px;
+}
+
+.search-media-card {
+    min-width: 0;
+
+    cursor: pointer;
+}
+
+.search-media-cover {
+    position: relative;
+
+    width: 100%;
+    aspect-ratio: 1;
+
+    overflow: hidden;
+
+    border-radius: 9px;
+
+    background: #e9edf2;
+
+    box-shadow:
+            0 3px 14px
+            rgba(
+                    40,
+                    52,
+                    70,
+                    0.07
+            );
+}
+
+.search-media-cover img {
+    width: 100%;
+    height: 100%;
+
+    display: block;
+
+    object-fit: cover;
+
+    transition:
+            transform 0.22s ease;
+}
+
+.search-media-card:hover
+.search-media-cover img {
+    transform:
+            scale(1.035);
+}
+
+.search-card-count {
+    position: absolute;
+
+    top: 7px;
+    right: 8px;
+
+    padding:
+            3px
+            7px;
+
+    border-radius: 9px;
+
+    color: #ffffff;
+    font-size: 10px;
+
+    background:
+            rgba(
+                    0,
+                    0,
+                    0,
+                    0.45
+            );
+}
+
+.search-media-card h3 {
+    margin:
+            10px
+            0
+            0;
+
+    overflow: hidden;
+
+    color: #303949;
+    font-size: 14px;
+    font-weight: 500;
+
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.search-media-card p {
+    margin:
+            5px
+            0
+            0;
+
+    overflow: hidden;
+
+    color: #9199a7;
+    font-size: 12px;
+
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.search-media-card:hover h3 {
+    color: #c20c0c;
+}
+
+/* =========================
+   歌手网格
+   ========================= */
+
+.search-artist-grid {
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            4,
+            minmax(
+                    0,
+                    1fr
+            )
+        );
+
+    gap: 18px;
+}
+
+.search-artist-card {
+    min-width: 0;
+
+    padding: 16px;
+
+    display: flex;
+    align-items: center;
+    gap: 14px;
+
+    border-radius: 11px;
+
+    background:
+            rgba(
+                    255,
+                    255,
+                    255,
+                    0.65
+            );
+
+    cursor: pointer;
+
+    transition:
+            background 0.15s ease,
+            transform 0.15s ease;
+}
+
+.search-artist-card:hover {
+    background: #ffffff;
+
+    transform:
+            translateY(-2px);
+}
+
+.search-artist-card img {
+    width: 62px;
+    height: 62px;
+
+    flex: 0 0 62px;
+
+    border-radius: 50%;
+
+    object-fit: cover;
+}
+
+.search-artist-card > div {
+    min-width: 0;
+
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.search-artist-card strong {
+    overflow: hidden;
+
+    color: #283345;
+    font-size: 14px;
+
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.search-artist-card span,
+.search-artist-card small {
+    overflow: hidden;
+
+    color: #8c95a4;
+    font-size: 11px;
+
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* =========================
+   分类页面
+   ========================= */
+
+.search-category-page > h2 {
+    margin:
+            0
+            0
+            22px;
+
+    color: #202938;
+    font-size: 20px;
+}
+
+/* =========================
+   空 / 加载
+   ========================= */
+
+.search-loading,
+.search-empty {
+    min-height: 340px;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    color: #8d96a5;
+}
+
+.search-loading-circle {
+    width: 30px;
+    height: 30px;
+
+    border:
+            3px solid
+            #e5e8ed;
+
+    border-top-color:
+            #c20c0c;
+
+    border-radius: 50%;
+
+    animation:
+            search-spin
+            0.8s
+            linear
+            infinite;
+}
+
+.search-loading p {
+    margin-top: 14px;
+
+    font-size: 13px;
+}
+
+.search-empty strong {
+    color: #505b6c;
+    font-size: 16px;
+}
+
+.search-empty span {
+    margin-top: 8px;
+
+    color: #9ba3af;
+    font-size: 13px;
+}
+
+.search-empty.error {
+    color: #c20c0c;
+}
+
+@keyframes search-spin {
+    to {
+        transform:
+                rotate(360deg);
+    }
+}
+
+/* =========================
+   Responsive
+   ========================= */
+
+@media (max-width: 1050px) {
+
+    .search-card-grid {
+        grid-template-columns:
+            repeat(
+                4,
+                1fr
+            );
+    }
+
+    .search-card-grid.large {
+        grid-template-columns:
+            repeat(
+                4,
+                1fr
+            );
+    }
+
+    .search-artist-grid {
+        grid-template-columns:
+            repeat(
+                2,
+                1fr
+            );
+    }
+}
+
+@media (max-width: 760px) {
+
+    .search-page {
+        max-width:
+                calc(
+                        100%
+                        - 24px
+                );
+
+        padding-top: 24px;
+    }
+
+    .search-heading h1 {
+        font-size: 25px;
+    }
+
+    .search-tabs {
+        gap: 24px;
+
+        overflow-x: auto;
+    }
+
+    .search-song-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .search-card-grid,
+    .search-card-grid.large {
+        grid-template-columns:
+            repeat(
+                2,
+                1fr
+            );
+    }
+
+    .search-artist-grid {
+        grid-template-columns: 1fr;
+    }
+}

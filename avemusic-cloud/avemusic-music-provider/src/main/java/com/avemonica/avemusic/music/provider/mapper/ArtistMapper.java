@@ -29,54 +29,115 @@ public interface ArtistMapper extends BaseMapper<ArtistDO> {
     );
 
     @Select("""
-            <script>
-            SELECT
-                CAST(artist.id AS CHAR) AS artistId,
-                artist.name AS artistName,
-                CAST(artist.translated_name AS CHAR) AS translatedNames,
-                CAST(artist.owner_user_id AS CHAR) AS ownerUserId,
-                artist.country_region AS countryRegion,
-                artist.style AS style,
-                artist.avatar_url AS avatarUrl,
-                artist.introduction AS introduction,
-                artist.follower_count AS followerCount,
-                COUNT(DISTINCT song_relation.song_id) AS songCount,
-                COUNT(DISTINCT album_relation.album_id) AS albumCount,
-                artist.audit_status AS auditStatus,
-                CASE WHEN artist.status = 1
-                    THEN 'ONLINE' ELSE 'OFFLINE'
-                END AS publishStatus,
-                DATE_FORMAT(
-                    artist.created_at,
-                    '%Y-%m-%d %H:%i:%s'
-                ) AS createdAt
-            FROM singer_tb artist
-            LEFT JOIN song_artist_tb song_relation
-                ON song_relation.artist_id = artist.id
-            LEFT JOIN artist_album_tb album_relation
-                ON album_relation.artist_id = artist.id
-            <if test="pendingOnly">
-                WHERE artist.audit_status = 'PENDING'
-            </if>
-            GROUP BY
-                artist.id,
-                artist.name,
-                CAST(artist.translated_name AS CHAR),
-                artist.owner_user_id,
-                artist.country_region,
-                artist.style,
-                artist.avatar_url,
-                artist.introduction,
-                artist.follower_count,
-                artist.audit_status,
-                artist.status,
-                artist.created_at
-            ORDER BY artist.id DESC
-            LIMIT 200
-            </script>
-            """)
-    List<Map<String, Object>> selectManagementArtists(
-            @Param("pendingOnly") boolean pendingOnly
+        <script>
+
+        SELECT
+            CAST(
+                artist.id AS CHAR
+            ) AS artistId,
+
+            artist.name
+                AS artistName,
+
+            CAST(
+                artist.translated_name
+                AS CHAR
+            ) AS translatedNames,
+
+            CAST(
+                artist.owner_user_id
+                AS CHAR
+            ) AS ownerUserId,
+
+            artist.country_region
+                AS countryRegion,
+
+            artist.artist_type
+                AS artistType,
+
+            artist.style
+                AS style,
+
+            artist.avatar_url
+                AS avatarUrl,
+
+            artist.introduction
+                AS introduction,
+
+            artist.follower_count
+                AS followerCount,
+
+            COUNT(
+                DISTINCT
+                song_relation.song_id
+            ) AS songCount,
+
+            COUNT(
+                DISTINCT
+                album_relation.album_id
+            ) AS albumCount,
+
+            artist.audit_status
+                AS auditStatus,
+
+            CASE
+                WHEN artist.status = 1
+                    THEN 'ONLINE'
+                ELSE 'OFFLINE'
+            END AS publishStatus,
+
+            DATE_FORMAT(
+                artist.created_at,
+                '%Y-%m-%d %H:%i:%s'
+            ) AS createdAt
+
+        FROM singer_tb artist
+
+        LEFT JOIN song_artist_tb
+            song_relation
+            ON song_relation.artist_id =
+               artist.id
+
+        LEFT JOIN artist_album_tb
+            album_relation
+            ON album_relation.artist_id =
+               artist.id
+
+        <if test="pendingOnly">
+            WHERE
+                artist.audit_status =
+                'PENDING'
+        </if>
+
+        GROUP BY
+            artist.id,
+            artist.name,
+            CAST(
+                artist.translated_name
+                AS CHAR
+            ),
+            artist.owner_user_id,
+            artist.country_region,
+            artist.artist_type,
+            artist.style,
+            artist.avatar_url,
+            artist.introduction,
+            artist.follower_count,
+            artist.audit_status,
+            artist.status,
+            artist.created_at
+
+        ORDER BY
+            artist.id DESC
+
+        LIMIT 200
+
+        </script>
+        """)
+    List<Map<String, Object>>
+    selectManagementArtists(
+            @Param("pendingOnly")
+            boolean pendingOnly
     );
 
     @Select("""
@@ -157,6 +218,314 @@ public interface ArtistMapper extends BaseMapper<ArtistDO> {
 
             @Param("limit")
             int limit
+    );
+
+    @Select("""
+        <script>
+
+        SELECT
+            CAST(artist.id AS CHAR)
+                AS id,
+
+            artist.name
+                AS name,
+
+            CONCAT_WS(
+                ' · ',
+
+                NULLIF(
+                    artist.translated_name,
+                    ''
+                ),
+
+                NULLIF(
+                    artist.country_region,
+                    ''
+                )
+            ) AS subtitle,
+
+            artist.avatar_url
+                AS coverUrl,
+
+            NULL
+                AS audioUrl,
+
+            0
+                AS durationSeconds,
+
+            COALESCE(
+                artist.follower_count,
+                0
+            ) AS popularity,
+
+            ''
+                AS artistIds
+
+        FROM singer_tb artist
+
+        WHERE
+            artist.audit_status =
+                'APPROVED'
+
+            AND artist.status = 1
+
+            AND (
+                <foreach
+                    collection="keywords"
+                    item="keyword"
+                    separator=" OR "
+                >
+
+                    (
+                        artist.name LIKE
+                            CONCAT(
+                                '%',
+                                #{keyword},
+                                '%'
+                            )
+
+                        OR artist.translated_name LIKE
+                            CONCAT(
+                                '%',
+                                #{keyword},
+                                '%'
+                            )
+                    )
+
+                </foreach>
+            )
+
+        ORDER BY
+
+            CASE
+
+                WHEN artist.name =
+                        #{originalKeyword}
+                    THEN 0
+
+                WHEN artist.translated_name =
+                        #{originalKeyword}
+                    THEN 0
+
+                WHEN artist.name LIKE
+                        CONCAT(
+                            #{originalKeyword},
+                            '%'
+                        )
+                    THEN 1
+
+                WHEN artist.translated_name LIKE
+                        CONCAT(
+                            #{originalKeyword},
+                            '%'
+                        )
+                    THEN 1
+
+                WHEN artist.name LIKE
+                        CONCAT(
+                            '%',
+                            #{originalKeyword},
+                            '%'
+                        )
+                    THEN 2
+
+                WHEN artist.translated_name LIKE
+                        CONCAT(
+                            '%',
+                            #{originalKeyword},
+                            '%'
+                        )
+                    THEN 2
+
+                ELSE 3
+
+            END,
+
+            artist.follower_count DESC,
+            artist.id DESC
+
+        LIMIT #{limit}
+
+        </script>
+        """)
+    List<Map<String, Object>>
+    searchPublic(
+            @Param("keywords")
+            List<String> keywords,
+
+            @Param("originalKeyword")
+            String originalKeyword,
+
+            @Param("limit")
+            int limit
+    );
+
+    @Select("""
+        <script>
+
+        SELECT COUNT(*)
+
+        FROM singer_tb artist
+
+        WHERE
+            artist.audit_status = 'APPROVED'
+            AND artist.status = 1
+
+        <if test="
+            area != null
+            and area != ''
+            and area != 'ALL'
+        ">
+            AND artist.area_code =
+                #{area}
+        </if>
+
+        <if test="
+            category != null
+            and category != ''
+            and category != 'ALL'
+        ">
+            AND artist.artist_type =
+                #{category}
+        </if>
+
+        <if test="
+            initial != null
+            and initial != ''
+            and initial != 'HOT'
+        ">
+            AND artist.name_initial =
+                #{initial}
+        </if>
+
+        </script>
+        """)
+    long countPublicArtistDirectory(
+            @Param("area")
+            String area,
+
+            @Param("category")
+            String category,
+
+            @Param("initial")
+            String initial
+    );
+
+    @Select("""
+        <script>
+
+        SELECT
+            CAST(
+                artist.id AS CHAR
+            ) AS artistId,
+
+            artist.name
+                AS artistName,
+
+            artist.avatar_url
+                AS avatarUrl,
+
+            (
+                SELECT COUNT(
+                    DISTINCT relation.song_id
+                )
+
+                FROM song_artist_tb relation
+
+                INNER JOIN song_tb song
+                    ON song.id =
+                       relation.song_id
+
+                WHERE
+                    relation.artist_id =
+                        artist.id
+
+                    AND song.audit_status =
+                        'APPROVED'
+
+                    AND song.status = 1
+            ) AS songCount
+
+        FROM singer_tb artist
+
+        WHERE
+            artist.audit_status =
+                'APPROVED'
+
+            AND artist.status = 1
+
+        <if test="
+            area != null
+            and area != ''
+            and area != 'ALL'
+        ">
+            AND artist.area_code =
+                #{area}
+        </if>
+
+        <if test="
+            category != null
+            and category != ''
+            and category != 'ALL'
+        ">
+            AND artist.artist_type =
+                #{category}
+        </if>
+
+        <if test="
+            initial != null
+            and initial != ''
+            and initial != 'HOT'
+        ">
+            AND artist.name_initial =
+                #{initial}
+        </if>
+
+        ORDER BY
+
+        <choose>
+
+            <!-- 热门 -->
+            <when test="
+                initial == null
+                or initial == ''
+                or initial == 'HOT'
+            ">
+                artist.follower_count DESC,
+                artist.id DESC
+            </when>
+
+            <!-- 字母分类 -->
+            <otherwise>
+                artist.follower_count DESC,
+                artist.name ASC,
+                artist.id DESC
+            </otherwise>
+
+        </choose>
+
+        LIMIT
+            #{offset},
+            #{size}
+
+        </script>
+        """)
+    List<Map<String, Object>>
+    selectPublicArtistDirectory(
+            @Param("area")
+            String area,
+
+            @Param("category")
+            String category,
+
+            @Param("initial")
+            String initial,
+
+            @Param("offset")
+            int offset,
+
+            @Param("size")
+            int size
     );
 
     @Select("""

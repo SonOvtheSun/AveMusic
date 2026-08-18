@@ -1,6 +1,7 @@
 package com.avemonica.avemusic.music.provider.client;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -10,30 +11,22 @@ import org.springframework.web.client.RestClient;
 
 import java.net.http.HttpClient;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 
 @Component
 public final class OllamaClient {
 
-    /*
-     * Qwen 只允许返回下面三个字段。
-     *
-     * matched:
-     *   是否认为候选中存在目标歌曲。
-     *
-     * selectedId:
-     *   matched=true 时必须为候选中的 LRCLIB id；
-     *   matched=false 时返回 0。
-     *
-     * confidence:
-     *   0 ~ 1。
-     */
     private static final Map<String, Object>
             MATCH_RESPONSE_SCHEMA =
             Map.of(
                     "type",
                     "object",
-
                     "properties",
                     Map.of(
                             "matched",
@@ -41,7 +34,6 @@ public final class OllamaClient {
                                     "type",
                                     "boolean"
                             ),
-
                             "selectedId",
                             Map.of(
                                     "type",
@@ -49,7 +41,6 @@ public final class OllamaClient {
                                     "minimum",
                                     0
                             ),
-
                             "confidence",
                             Map.of(
                                     "type",
@@ -60,86 +51,155 @@ public final class OllamaClient {
                                     1
                             )
                     ),
-
                     "required",
                     List.of(
                             "matched",
                             "selectedId",
                             "confidence"
                     ),
+                    "additionalProperties",
+                    false
+            );
+
+    private static final String
+            MATCH_SYSTEM_PROMPT = """
+            你是音乐元数据匹配器。
+
+            你的任务只有一个：
+            根据 target 与 candidates，判断候选中是否存在同一首歌曲，
+            如果存在，只能从 candidates 中选一个已有 id。
+
+            判断重点：
+            1. 歌曲名最重要；
+            2. 音乐人原名、译名、罗马音可能指向同一音乐人；
+            3. 专辑名可以有普通版、限定版等轻微差异；
+            4. 时长接近是重要证据；
+            5. localScore 是 Java 已计算的先验分数，应重点参考；
+            6. Live、Remix、Instrumental、Cover、Acoustic、Demo、Karaoke、Off Vocal
+               等版本标签不一致时，不要轻易判定为同一版本。
+
+            严格限制：
+            - 不允许生成歌词；
+            - 不允许创造候选；
+            - matched=false 时 selectedId 必须为 0；
+            - matched=true 时 selectedId 必须来自 candidates；
+            - confidence 必须在 0 到 1 之间；
+            - 证据不足时宁可 matched=false；
+            - 只返回符合 JSON Schema 的 JSON，不要 Markdown，不要解释。
+            """;
+
+    private static final String
+            TRANSLATION_SYSTEM_PROMPT = """
+            你是严格的逐行音乐歌词翻译器。
+
+            目标：把输入歌词逐行翻译成自然、准确的简体中文。
+
+            必须严格遵守：
+            1. translations 数组长度必须与输入 lines 数组长度完全一致；
+            2. translations[i] 只对应 lines[i].text；
+            3. 严格保持顺序；
+            4. 不允许合并、拆分、新增或删除歌词行；
+            5. 每个数组元素都必须是一个合法 JSON 字符串；
+            6. 字符串内部出现英文双引号时必须正确 JSON 转义；
+            7. 不要输出 Markdown、代码块、注释、解释或额外字段；
+            8. 人名、乐队名、作品名等无法自然翻译时可保留原文；
+            9. 原句已经是自然简体中文时，对应项返回空字符串 ""；
+            10. 空行对应空字符串 ""；
+            11. 不要在翻译外层自行添加 []、【】、引号或编号；
+            12. 只返回指定 JSON Schema。
+            """;
+
+    private static final String
+            SEARCH_EXPANSION_SYSTEM_PROMPT = """
+        你是音乐平台搜索词扩展器。
+
+        用户会输入一个用于搜索歌曲、音乐人、专辑或歌单的关键词。
+
+        你的任务不是返回搜索结果，而是根据原搜索词生成 2~3 个
+        最可能帮助数据库检索到同一目标的搜索词。
+
+        优先考虑：
+        1. 中文名、英文名、日文名之间的常见转换；
+        2. 音乐人、乐队的常见别名；
+        3. 罗马音或英文写法；
+        4. 常见简称对应的完整名称；
+        5. 明显输入错误的合理纠正；
+        6. 简繁体差异。
+
+        严格禁止：
+        1. 不得推荐与用户目标无关的音乐；
+        2. 不得扩展成音乐风格、情绪等宽泛概念；
+        3. 不得凭空创造不存在的作品；
+        4. 不得返回原关键词本身；
+        5. 不要解释；
+        6. 只返回 JSON Schema 指定内容。
+
+        例如：
+
+        周董
+        -> 周杰伦
+        -> Jay Chou
+        -> 周杰倫
+
+        mygo
+        -> MyGO!!!!!
+        -> BanG Dream! It's MyGO!!!!!
+
+        进击巨人
+        -> 进击的巨人
+        -> Attack on Titan
+        -> 進撃の巨人
+        """;
+
+    private static final Map<String, Object>
+            SEARCH_EXPANSION_SCHEMA =
+            Map.of(
+                    "type",
+                    "object",
+
+                    "properties",
+                    Map.of(
+                            "queries",
+                            Map.of(
+                                    "type",
+                                    "array",
+                                    "minItems",
+                                    2,
+                                    "maxItems",
+                                    3,
+                                    "items",
+                                    Map.of(
+                                            "type",
+                                            "string",
+                                            "minLength",
+                                            1,
+                                            "maxLength",
+                                            64
+                                    )
+                            )
+                    ),
+
+                    "required",
+                    List.of(
+                            "queries"
+                    ),
 
                     "additionalProperties",
                     false
             );
 
-    /*
-     * Qwen 的职责非常有限：
-     *
-     * 只判断候选是不是目标歌曲，
-     * 不允许生成歌词，
-     * 不允许自己创造候选 ID。
-     */
-    private static final String SYSTEM_PROMPT = """
-            你是音乐元数据匹配器。
 
-            你的唯一任务是：
-            根据目标歌曲元数据，从给定候选列表中判断
-            哪一个候选最可能与目标歌曲是同一首歌曲。
-
-            判断时重点考虑：
-            1. 歌曲名称；
-            2. 音乐人名称及译名；
-            3. 专辑名称；
-            4. 歌曲时长；
-            5. 本地程序提供的 localScore。
-
-            注意：
-            - 不同语言、罗马音、中文译名可以表示同一音乐人。
-            - 专辑可能存在普通版、限定版、单曲版等轻微名称差异。
-            - Live、Remix、Instrumental、Cover 等不同版本不能轻易视为同一首。
-            - 时长接近是重要证据。
-            - 只能从 candidates 中选择。
-            - 不允许编造候选。
-            - 不允许生成或补全歌词。
-            - 如果没有足够可信的候选，matched 必须为 false。
-            - matched=false 时 selectedId 必须为 0。
-            - matched=true 时 selectedId 必须是 candidates 中存在的 id。
-            - confidence 必须在 0 到 1 之间。
-
-            只按照指定 JSON Schema 返回结果。
-            """;
-
-    private static final String
-            TRANSLATION_SYSTEM_PROMPT = """
-        你是音乐歌词翻译器。
-
-        请将输入歌词逐行翻译为自然、准确的简体中文。
-
-        必须严格遵守：
-
-        1. 每个输入 index 必须恰好返回一次。
-        2. 不允许合并歌词行。
-        3. 不允许拆分歌词行。
-        4. 不允许改变 index。
-        5. 不允许新增歌词内容。
-        6. 不允许删除歌词内容。
-        7. 不要输出解释、注释或翻译说明。
-        8. 人名、乐队名等专有名词无法自然翻译时可以保留原文。
-        9. 如果原句本身已经是自然的简体中文，
-           text 返回空字符串。
-        10. 只返回指定 JSON Schema。
-        11. 每个 translations 元素必须且只能包含
-            index 和 text 两个字段。
-        12. 同一个 JSON 对象中禁止重复出现
-            index 或 text 字段。
-        """;
 
     private final RestClient restClient;
-
     private final ObjectMapper objectMapper =
             new ObjectMapper();
-
     private final String model;
+
+    private final int translationBatchSize;
+    private final int translationMaxAttempts;
+    private final int matchMaxAttempts;
+    private final long retryBackoffMillis;
+    private final int maxLogContentChars;
 
     public OllamaClient(
             @Value(
@@ -162,37 +222,111 @@ public final class OllamaClient {
 
             @Value(
                     "${avemusic.ai.ollama."
-                            + "read-timeout-seconds:180}"
+                            + "read-timeout-seconds:300}"
             )
-            long readTimeoutSeconds
-    ) {
-        this.model =
-                model;
+            long readTimeoutSeconds,
 
-        /*
-         * Ollama 第一次加载模型可能比较慢，
-         * 所以读取超时不能设置得像普通 HTTP
-         * 接口一样只有几秒。
-         */
+            @Value(
+                    "${avemusic.ai.ollama."
+                            + "translation-batch-size:16}"
+            )
+            int translationBatchSize,
+
+            @Value(
+                    "${avemusic.ai.ollama."
+                            + "translation-max-attempts:3}"
+            )
+            int translationMaxAttempts,
+
+            @Value(
+                    "${avemusic.ai.ollama."
+                            + "match-max-attempts:2}"
+            )
+            int matchMaxAttempts,
+
+            @Value(
+                    "${avemusic.ai.ollama."
+                            + "retry-backoff-millis:250}"
+            )
+            long retryBackoffMillis,
+
+            @Value(
+                    "${avemusic.ai.ollama."
+                            + "max-log-content-chars:2000}"
+            )
+            int maxLogContentChars
+    ) {
+        this.model = model;
+
+        this.translationBatchSize =
+                Math.max(
+                        4,
+                        Math.min(
+                                translationBatchSize,
+                                25
+                        )
+                );
+
+        this.translationMaxAttempts =
+                Math.max(
+                        1,
+                        Math.min(
+                                translationMaxAttempts,
+                                5
+                        )
+                );
+
+        this.matchMaxAttempts =
+                Math.max(
+                        1,
+                        Math.min(
+                                matchMaxAttempts,
+                                4
+                        )
+                );
+
+        this.retryBackoffMillis =
+                Math.max(
+                        0,
+                        Math.min(
+                                retryBackoffMillis,
+                                5_000
+                        )
+                );
+
+        this.maxLogContentChars =
+                Math.max(
+                        200,
+                        Math.min(
+                                maxLogContentChars,
+                                10_000
+                        )
+                );
+
         HttpClient httpClient =
                 HttpClient
                         .newBuilder()
                         .connectTimeout(
                                 Duration.ofSeconds(
-                                        connectTimeoutSeconds
+                                        Math.max(
+                                                1,
+                                                connectTimeoutSeconds
+                                        )
                                 )
                         )
                         .build();
 
-        JdkClientHttpRequestFactory
-                requestFactory =
+        JdkClientHttpRequestFactory requestFactory =
                 new JdkClientHttpRequestFactory(
                         httpClient
                 );
 
         requestFactory.setReadTimeout(
                 Duration.ofSeconds(
-                        readTimeoutSeconds
+                        Math.max(
+                                1,
+                                readTimeoutSeconds
+                        )
                 )
         );
 
@@ -206,6 +340,17 @@ public final class OllamaClient {
                         .build();
     }
 
+    /**
+     * 逐行翻译。
+     *
+     * 核心容错策略：
+     * 1. 小批次；
+     * 2. JSON Schema 严格限定数组长度；
+     * 3. 每批自动重试；
+     * 4. 连续失败时自动二分批次；
+     * 5. 单行仍失败才判整首翻译失败；
+     * 6. 不尝试用正则“修坏 JSON”，避免误改歌词正文。
+     */
     public Optional<List<String>>
     translateLyrics(
             List<String> lines
@@ -219,112 +364,56 @@ public final class OllamaClient {
             );
         }
 
-        /*
-         * 不一次把整首几百行歌词全部扔给模型。
-         * 每次最多40行。
-         */
-        final int batchSize = 40;
+        List<String> normalizedLines =
+                new ArrayList<>(
+                        lines.size()
+                );
+
+        for (String line : lines) {
+            normalizedLines.add(
+                    line == null
+                            ? ""
+                            : line
+            );
+        }
 
         List<String> result =
                 new ArrayList<>(
                         Collections.nCopies(
-                                lines.size(),
+                                normalizedLines.size(),
                                 ""
                         )
                 );
 
         for (
                 int start = 0;
-                start < lines.size();
-                start += batchSize
+                start < normalizedLines.size();
+                start += translationBatchSize
         ) {
             int end =
                     Math.min(
-                            start + batchSize,
-                            lines.size()
+                            start
+                                    + translationBatchSize,
+                            normalizedLines.size()
                     );
 
-            List<TranslationLine> batch =
-                    new ArrayList<>();
-
-            for (
-                    int index = start;
-                    index < end;
-                    index++
-            ) {
-                batch.add(
-                        new TranslationLine(
-                                index,
-                                lines.get(index)
-                        )
-                );
-            }
-
-            Optional<TranslationResponse>
-                    translated =
-                    translateLyricsBatch(
-                            batch
+            boolean success =
+                    translateRange(
+                            normalizedLines,
+                            start,
+                            end,
+                            result
                     );
 
-            if (translated.isEmpty()) {
-                /*
-                 * 某个批次失败：
-                 * 整首翻译都不缓存，
-                 * 防止出现半截翻译。
-                 */
-                return Optional.empty();
-            }
-
-            TranslationResponse response =
-                    translated.get();
-
-            if (
-                    response.translations()
-                            == null
-            ) {
-                return Optional.empty();
-            }
-
-            Set<Integer> received =
-                    new HashSet<>();
-
-            for (
-                    TranslationItem item
-                    : response.translations()
-            ) {
-                if (item == null) {
-                    return Optional.empty();
-                }
-
-                int index =
-                        item.index();
-
-                /*
-                 * 模型不允许返回当前批次外的行号。
-                 */
-                if (
-                        index < start
-                                || index >= end
-                                || !received.add(index)
-                ) {
-                    return Optional.empty();
-                }
-
-                result.set(
-                        index,
-                        item.text() == null
-                                ? ""
-                                : item.text().trim()
+            if (!success) {
+                System.err.println(
+                        "[Lyrics-AI] 翻译最终失败，"
+                                + "range="
+                                + start
+                                + ".."
+                                + (end - 1)
                 );
-            }
 
-            /*
-             * 必须一行不少。
-             */
-            if (
-                    received.size()
-                            != end - start
-            ) {
                 return Optional.empty();
             }
         }
@@ -334,54 +423,20 @@ public final class OllamaClient {
         );
     }
 
-    private Optional<TranslationResponse>
-    translateLyricsBatch(
-            List<TranslationLine> batch
+    public List<String> expandSearchKeywords(
+            String keyword
     ) {
+        if (
+                keyword == null
+                        || keyword.isBlank()
+        ) {
+            return List.of();
+        }
+
+        String normalized =
+                keyword.trim();
+
         try {
-            String input =
-                    objectMapper
-                            .writeValueAsString(
-                                    Map.of(
-                                            "lines",
-                                            batch
-                                    )
-                            );
-
-            /*
-             * Ollama 官方也建议：
-             * 除了 format 传 schema，
-             * prompt 中也带上 schema，
-             * 能进一步约束结构化输出。
-             */
-            String schemaJson =
-                    objectMapper
-                            .writeValueAsString(
-                                    TRANSLATION_RESPONSE_SCHEMA
-                            );
-
-            String userPrompt = """
-                请逐行翻译下面的歌词为简体中文。
-
-                必须严格按照给定 JSON Schema 返回。
-
-                不要输出 Markdown。
-                不要输出 ```json。
-                不要输出代码块。
-                不要输出任何解释。
-                返回内容的第一个字符必须是 {
-                最后一个字符必须是 }
-
-                JSON Schema：
-                %s
-
-                输入：
-                %s
-                """.formatted(
-                    schemaJson,
-                    input
-            );
-
             ChatRequest request =
                     new ChatRequest(
                             model,
@@ -389,39 +444,37 @@ public final class OllamaClient {
                             List.of(
                                     new ChatMessage(
                                             "system",
-                                            TRANSLATION_SYSTEM_PROMPT
+                                            SEARCH_EXPANSION_SYSTEM_PROMPT
                                     ),
 
                                     new ChatMessage(
                                             "user",
-                                            userPrompt
+                                            "原始搜索词："
+                                                    + normalized
                                     )
                             ),
 
                             false,
-
-                            /*
-                             * 不需要 thinking。
-                             */
                             false,
 
-                            TRANSLATION_RESPONSE_SCHEMA,
+                            SEARCH_EXPANSION_SCHEMA,
 
                             Map.of(
                                     "temperature",
-                                    0
+                                    0.1,
+                                    "seed",
+                                    42,
+                                    "num_predict",
+                                    128
                             )
                     );
 
             ChatResponse response =
                     restClient
                             .post()
-                            .uri(
-                                    "/api/chat"
-                            )
+                            .uri("/api/chat")
                             .contentType(
-                                    MediaType
-                                            .APPLICATION_JSON
+                                    MediaType.APPLICATION_JSON
                             )
                             .body(request)
                             .retrieve()
@@ -431,75 +484,477 @@ public final class OllamaClient {
 
             if (
                     response == null
+                            || response.message() == null
                             || response.message()
-                            == null
+                            .content() == null
             ) {
-                System.err.println(
-                        "[Lyrics-AI] Ollama返回空响应"
-                );
-
-                return Optional.empty();
+                return List.of();
             }
 
-            String rawContent =
-                    response.message()
-                            .content();
-
-            if (
-                    rawContent == null
-                            || rawContent.isBlank()
-            ) {
-                System.err.println(
-                        "[Lyrics-AI] Ollama翻译content为空"
-                );
-
-                return Optional.empty();
-            }
-
-            System.out.println(
-                    "[Lyrics-AI] 翻译原始输出："
-                            + rawContent
-            );
-
-            String jsonContent =
-                    normalizeJsonContent(
-                            rawContent
+            JsonNode root =
+                    objectMapper.readTree(
+                            normalizeJsonContent(
+                                    response.message()
+                                            .content()
+                            )
                     );
 
-            if (jsonContent.isBlank()) {
-                return Optional.empty();
+            JsonNode queries =
+                    root.path("queries");
+
+            if (!queries.isArray()) {
+                return List.of();
             }
 
-            TranslationResponse result =
-                    objectMapper.readValue(
-                            jsonContent,
-                            TranslationResponse.class
-                    );
+            LinkedHashMap<
+                    String,
+                    String
+                    > result =
+                    new LinkedHashMap<>();
 
-            return Optional.ofNullable(
-                    result
+            for (JsonNode item : queries) {
+
+                if (!item.isTextual()) {
+                    continue;
+                }
+
+                String value =
+                        item.asText()
+                                .trim();
+
+                if (
+                        value.isBlank()
+                                || value.length() > 64
+                                || value.equalsIgnoreCase(
+                                normalized
+                        )
+                ) {
+                    continue;
+                }
+
+                result.putIfAbsent(
+                        value.toLowerCase(
+                                Locale.ROOT
+                        ),
+                        value
+                );
+
+                if (result.size() >= 3) {
+                    break;
+                }
+            }
+
+            return List.copyOf(
+                    result.values()
             );
 
         } catch (Exception exception) {
+
+            /*
+             * AI增强失败绝对不能导致搜索功能不可用。
+             */
             System.err.println(
-                    "[Lyrics-AI] 歌词翻译失败："
-                            + exception
-                            .getMessage()
+                    "[Search-AI] 搜索词扩展失败："
+                            + exception.getMessage()
             );
 
-            exception.printStackTrace();
-
-            return Optional.empty();
+            return List.of();
         }
     }
 
+    private boolean translateRange(
+            List<String> lines,
+            int start,
+            int end,
+            List<String> output
+    ) {
+        List<TranslationLine> batch =
+                new ArrayList<>(
+                        end - start
+                );
+
+        for (
+                int index = start;
+                index < end;
+                index++
+        ) {
+            batch.add(
+                    new TranslationLine(
+                            index,
+                            lines.get(index)
+                    )
+            );
+        }
+
+        Optional<List<String>> translated =
+                translateLyricsBatchWithRetry(
+                        batch
+                );
+
+        if (translated.isPresent()) {
+            List<String> values =
+                    translated.get();
+
+            for (
+                    int offset = 0;
+                    offset < values.size();
+                    offset++
+            ) {
+                output.set(
+                        start + offset,
+                        values.get(offset)
+                );
+            }
+
+            return true;
+        }
+
+        int size = end - start;
+
+        if (size <= 1) {
+            return false;
+        }
+
+        int middle =
+                start + size / 2;
+
+        System.err.println(
+                "[Lyrics-AI] 批次连续失败，"
+                        + "自动二分："
+                        + start
+                        + ".."
+                        + (end - 1)
+                        + " -> "
+                        + start
+                        + ".."
+                        + (middle - 1)
+                        + " + "
+                        + middle
+                        + ".."
+                        + (end - 1)
+        );
+
+        return translateRange(
+                lines,
+                start,
+                middle,
+                output
+        ) && translateRange(
+                lines,
+                middle,
+                end,
+                output
+        );
+    }
+
+    private Optional<List<String>>
+    translateLyricsBatchWithRetry(
+            List<TranslationLine> batch
+    ) {
+        Exception lastException = null;
+
+        for (
+                int attempt = 1;
+                attempt <= translationMaxAttempts;
+                attempt++
+        ) {
+            try {
+                List<String> result =
+                        translateLyricsBatchOnce(
+                                batch
+                        );
+
+                return Optional.of(
+                        result
+                );
+
+            } catch (Exception exception) {
+                lastException = exception;
+
+                System.err.println(
+                        "[Lyrics-AI] 批次翻译失败，"
+                                + "attempt="
+                                + attempt
+                                + "/"
+                                + translationMaxAttempts
+                                + ", size="
+                                + batch.size()
+                                + ", error="
+                                + exception
+                                .getClass()
+                                .getSimpleName()
+                                + ": "
+                                + exception.getMessage()
+                );
+
+                if (
+                        attempt
+                                < translationMaxAttempts
+                ) {
+                    sleepQuietly(
+                            retryBackoffMillis
+                                    * attempt
+                    );
+                }
+            }
+        }
+
+        if (lastException != null) {
+            System.err.println(
+                    "[Lyrics-AI] 当前批次连续失败："
+                            + lastException.getMessage()
+            );
+        }
+
+        return Optional.empty();
+    }
+
+    private List<String>
+    translateLyricsBatchOnce(
+            List<TranslationLine> batch
+    ) throws Exception {
+        if (
+                batch == null
+                        || batch.isEmpty()
+        ) {
+            return List.of();
+        }
+
+        int expectedSize =
+                batch.size();
+
+        Map<String, Object> schema =
+                translationResponseSchema(
+                        expectedSize
+                );
+
+        String input =
+                objectMapper
+                        .writeValueAsString(
+                                Map.of(
+                                        "lines",
+                                        batch
+                                )
+                        );
+
+        String schemaJson =
+                objectMapper
+                        .writeValueAsString(
+                                schema
+                        );
+
+
+
+        String userPrompt = """
+                将下面 %d 行歌词逐行翻译成简体中文。
+
+                输出必须满足：
+                - translations 必须恰好包含 %d 个字符串；
+                - 第 i 项只能翻译第 i 行；
+                - 不得缺行、增行、合并或拆分；
+                - 不得输出 Markdown 或解释；
+                - JSON 字符串中的双引号必须正确转义；
+                - 返回内容只能是一个 JSON object。
+
+                JSON Schema：
+                %s
+
+                输入：
+                %s
+                """.formatted(
+                expectedSize,
+                expectedSize,
+                schemaJson,
+                input
+        );
+
+        Map<String, Object> options =
+                new LinkedHashMap<>();
+
+        options.put(
+                "temperature",
+                0
+        );
+
+        options.put(
+                "top_p",
+                0.8
+        );
+
+        options.put(
+                "seed",
+                42
+        );
+
+        options.put(
+                "num_predict",
+                Math.max(
+                        1024,
+                        Math.min(
+                                8192,
+                                512
+                                        + expectedSize
+                                        * 256
+                        )
+                )
+        );
+
+        ChatRequest request =
+                new ChatRequest(
+                        model,
+                        List.of(
+                                new ChatMessage(
+                                        "system",
+                                        TRANSLATION_SYSTEM_PROMPT
+                                ),
+                                new ChatMessage(
+                                        "user",
+                                        userPrompt
+                                )
+                        ),
+                        false,
+                        false,
+                        schema,
+                        options
+                );
+
+        ChatResponse response =
+                restClient
+                        .post()
+                        .uri(
+                                "/api/chat"
+                        )
+                        .contentType(
+                                MediaType
+                                        .APPLICATION_JSON
+                        )
+                        .body(request)
+                        .retrieve()
+                        .body(
+                                ChatResponse.class
+                        );
+
+        if (
+                response == null
+                        || response.message()
+                        == null
+        ) {
+            throw new IllegalStateException(
+                    "Ollama 返回空响应"
+            );
+        }
+
+        String rawContent =
+                response.message()
+                        .content();
+
+        if (
+                rawContent == null
+                        || rawContent.isBlank()
+        ) {
+            throw new IllegalStateException(
+                    "Ollama 翻译 content 为空"
+            );
+        }
+
+        System.out.println(
+                "[Lyrics-AI] 翻译原始输出："
+                        + abbreviate(
+                        rawContent
+                )
+        );
+
+        String jsonContent =
+                normalizeJsonContent(
+                        rawContent
+                );
+
+        if (jsonContent.isBlank()) {
+            throw new IllegalStateException(
+                    "模型输出中不存在 JSON object"
+            );
+        }
+
+        JsonNode root =
+                objectMapper.readTree(
+                        jsonContent
+                );
+
+        if (
+                root == null
+                        || !root.isObject()
+        ) {
+            throw new IllegalStateException(
+                    "翻译结果不是 JSON object"
+            );
+        }
+
+        JsonNode translationsNode =
+                root.get(
+                        "translations"
+                );
+
+        if (
+                translationsNode == null
+                        || !translationsNode
+                        .isArray()
+        ) {
+            throw new IllegalStateException(
+                    "translations 不是数组"
+            );
+        }
+
+        if (
+                translationsNode.size()
+                        != expectedSize
+        ) {
+            throw new IllegalStateException(
+                    "翻译行数不匹配，expected="
+                            + expectedSize
+                            + ", actual="
+                            + translationsNode.size()
+            );
+        }
+
+        List<String> result =
+                new ArrayList<>(
+                        expectedSize
+                );
+
+        for (
+                int index = 0;
+                index < translationsNode.size();
+                index++
+        ) {
+            JsonNode item =
+                    translationsNode.get(
+                            index
+                    );
+
+            if (
+                    item == null
+                            || !item.isTextual()
+            ) {
+                throw new IllegalStateException(
+                        "translations["
+                                + index
+                                + "] 不是字符串"
+                );
+            }
+
+            result.add(
+                    item.asText("")
+                            .trim()
+            );
+        }
+
+        return List.copyOf(
+                result
+        );
+    }
+
     /**
-     * 让 Qwen 从经过 Java 预筛选的候选中
-     * 选择最可能的一条。
-     *
-     * AI 故障不会直接导致歌词接口失败：
-     * 返回 Optional.empty()，
-     * 由 LyricsServiceImpl 按“未匹配”处理。
+     * 让 Qwen 只在 Java 已筛过的候选中做消歧。
      */
     public Optional<MatchDecision>
     selectLyricsCandidate(
@@ -514,208 +969,269 @@ public final class OllamaClient {
             return Optional.empty();
         }
 
-        try {
-            MatchInput input =
-                    new MatchInput(
-                            target,
-                            candidates
-                    );
+        Exception lastException = null;
 
-            String inputJson =
-                    objectMapper
-                            .writeValueAsString(
-                                    input
-                            );
+        for (
+                int attempt = 1;
+                attempt <= matchMaxAttempts;
+                attempt++
+        ) {
+            try {
+                MatchDecision decision =
+                        selectLyricsCandidateOnce(
+                                target,
+                                candidates
+                        );
 
-            String userPrompt = """
-                    下面是目标歌曲和候选歌曲的 JSON 数据。
-
-                    请判断 candidates 中是否存在与 target
-                    相同的歌曲。
-
-                    输入数据：
-                    %s
-                    """.formatted(
-                    inputJson
-            );
-
-            ChatRequest request =
-                    new ChatRequest(
-                            model,
-
-                            List.of(
-                                    new ChatMessage(
-                                            "system",
-                                            SYSTEM_PROMPT
-                                    ),
-
-                                    new ChatMessage(
-                                            "user",
-                                            userPrompt
-                                    )
-                            ),
-
-                            false,
-
-                            /*
-                             * 这里只需要最终 JSON，
-                             * 不需要 reasoning/thinking。
-                             */
-                            false,
-
-                            MATCH_RESPONSE_SCHEMA,
-
-                            Map.of(
-                                    "temperature",
-                                    0
-                            )
-                    );
-
-            System.out.println(
-                    "[Lyrics-AI] 开始调用 Ollama，"
-                            + "model="
-                            + model
-                            + ", candidates="
-                            + candidates.size()
-            );
-
-            ChatResponse response =
-                    restClient
-                            .post()
-                            .uri("/api/chat")
-                            .contentType(
-                                    MediaType
-                                            .APPLICATION_JSON
-                            )
-                            .body(request)
-                            .retrieve()
-                            .body(
-                                    ChatResponse.class
-                            );
-
-            if (
-                    response == null
-                            || response.message() == null
-            ) {
-                System.err.println(
-                        "[Lyrics-AI] Ollama返回空响应"
+                return Optional.ofNullable(
+                        decision
                 );
 
-                return Optional.empty();
-            }
+            } catch (Exception exception) {
+                lastException = exception;
 
-            String content =
-                    response.message()
-                            .content();
-
-            if (
-                    content == null
-                            || content.isBlank()
-            ) {
                 System.err.println(
-                        "[Lyrics-AI] Ollama content为空"
+                        "[Lyrics-AI] 候选消歧失败，"
+                                + "attempt="
+                                + attempt
+                                + "/"
+                                + matchMaxAttempts
+                                + ", error="
+                                + exception
+                                .getClass()
+                                .getSimpleName()
+                                + ": "
+                                + exception.getMessage()
                 );
 
-                return Optional.empty();
+                if (
+                        attempt
+                                < matchMaxAttempts
+                ) {
+                    sleepQuietly(
+                            retryBackoffMillis
+                                    * attempt
+                    );
+                }
             }
+        }
 
-            System.out.println(
-                    "[Lyrics-AI] Ollama结果："
-                            + content
+        if (lastException != null) {
+            System.err.println(
+                    "[Lyrics-AI] 候选消歧最终失败："
+                            + lastException.getMessage()
             );
+        }
 
-            String jsonContent =
-                    normalizeJsonContent(
-                            content
-                    );
+        return Optional.empty();
+    }
 
-            if (jsonContent.isBlank()) {
-                return Optional.empty();
-            }
-
-            MatchDecision decision =
-                    objectMapper.readValue(
-                            jsonContent,
-                            MatchDecision.class
-                    );
-
-            /*
-             * 二次校验模型输出。
-             * 即使模型违反提示词，也不能让非法 ID
-             * 进入后续业务流程。
-             */
-            if (
-                    decision.confidence() < 0
-                            || decision.confidence() > 1
-            ) {
-                System.err.println(
-                        "[Lyrics-AI] confidence非法："
-                                + decision.confidence()
+    private MatchDecision
+    selectLyricsCandidateOnce(
+            LyricsMatchTarget target,
+            List<LyricsMatchCandidate> candidates
+    ) throws Exception {
+        MatchInput input =
+                new MatchInput(
+                        target,
+                        candidates
                 );
 
-                return Optional.empty();
-            }
+        String inputJson =
+                objectMapper
+                        .writeValueAsString(
+                                input
+                        );
 
-            if (!decision.matched()) {
-                return Optional.of(
-                        new MatchDecision(
-                                false,
+        String userPrompt = """
+                下面是目标歌曲 target 与 Java 预筛选后的候选 candidates。
+                只能在 candidates 中选择，证据不足就返回 matched=false。
+
+                输入：
+                %s
+                """.formatted(
+                inputJson
+        );
+
+        ChatRequest request =
+                new ChatRequest(
+                        model,
+                        List.of(
+                                new ChatMessage(
+                                        "system",
+                                        MATCH_SYSTEM_PROMPT
+                                ),
+                                new ChatMessage(
+                                        "user",
+                                        userPrompt
+                                )
+                        ),
+                        false,
+                        false,
+                        MATCH_RESPONSE_SCHEMA,
+                        Map.of(
+                                "temperature",
                                 0,
-                                decision.confidence()
+                                "seed",
+                                42,
+                                "num_predict",
+                                256
                         )
                 );
-            }
 
-            if (decision.selectedId() <= 0) {
-                System.err.println(
-                        "[Lyrics-AI] matched=true，"
-                                + "但selectedId非法"
-                );
+        ChatResponse response =
+                restClient
+                        .post()
+                        .uri(
+                                "/api/chat"
+                        )
+                        .contentType(
+                                MediaType
+                                        .APPLICATION_JSON
+                        )
+                        .body(request)
+                        .retrieve()
+                        .body(
+                                ChatResponse.class
+                        );
 
-                return Optional.empty();
-            }
-
-            boolean candidateExists =
-                    candidates
-                            .stream()
-                            .anyMatch(
-                                    candidate ->
-                                            candidate.id()
-                                                    == decision
-                                                    .selectedId()
-                            );
-
-            if (!candidateExists) {
-                System.err.println(
-                        "[Lyrics-AI] 模型返回了候选集之外的ID："
-                                + decision.selectedId()
-                );
-
-                return Optional.empty();
-            }
-
-            return Optional.of(
-                    decision
+        if (
+                response == null
+                        || response.message()
+                        == null
+        ) {
+            throw new IllegalStateException(
+                    "Ollama 返回空响应"
             );
-
-        } catch (Exception exception) {
-            /*
-             * AI 在整个歌词服务里属于增强能力，
-             * 不能因为 Ollama 没启动就把歌曲播放页
-             * 直接打成 500。
-             */
-            System.err.println(
-                    "[Lyrics-AI] Ollama调用失败："
-                            + exception.getClass()
-                            .getSimpleName()
-                            + ": "
-                            + exception.getMessage()
-            );
-
-            exception.printStackTrace();
-
-            return Optional.empty();
         }
+
+        String content =
+                response.message()
+                        .content();
+
+        if (
+                content == null
+                        || content.isBlank()
+        ) {
+            throw new IllegalStateException(
+                    "Ollama 候选消歧 content 为空"
+            );
+        }
+
+        String jsonContent =
+                normalizeJsonContent(
+                        content
+                );
+
+        MatchDecision decision =
+                objectMapper.readValue(
+                        jsonContent,
+                        MatchDecision.class
+                );
+
+        if (
+                decision.confidence() < 0
+                        || decision.confidence() > 1
+        ) {
+            throw new IllegalStateException(
+                    "confidence 非法："
+                            + decision.confidence()
+            );
+        }
+
+        if (!decision.matched()) {
+            return new MatchDecision(
+                    false,
+                    0,
+                    decision.confidence()
+            );
+        }
+
+        if (decision.selectedId() <= 0) {
+            throw new IllegalStateException(
+                    "matched=true 但 selectedId 非法"
+            );
+        }
+
+        boolean candidateExists =
+                candidates
+                        .stream()
+                        .anyMatch(
+                                candidate ->
+                                        candidate.id()
+                                                == decision
+                                                .selectedId()
+                        );
+
+        if (!candidateExists) {
+            throw new IllegalStateException(
+                    "模型返回候选集之外的 ID："
+                            + decision.selectedId()
+            );
+        }
+
+        return decision;
+    }
+
+    private Map<String, Object>
+    translationResponseSchema(
+            int expectedSize
+    ) {
+        Map<String, Object> translations =
+                new LinkedHashMap<>();
+
+        translations.put(
+                "type",
+                "array"
+        );
+
+        translations.put(
+                "minItems",
+                expectedSize
+        );
+
+        translations.put(
+                "maxItems",
+                expectedSize
+        );
+
+        translations.put(
+                "items",
+                Map.of(
+                        "type",
+                        "string"
+                )
+        );
+
+        Map<String, Object> schema =
+                new LinkedHashMap<>();
+
+        schema.put(
+                "type",
+                "object"
+        );
+
+        schema.put(
+                "properties",
+                Map.of(
+                        "translations",
+                        translations
+                )
+        );
+
+        schema.put(
+                "required",
+                List.of(
+                        "translations"
+                )
+        );
+
+        schema.put(
+                "additionalProperties",
+                false
+        );
+
+        return schema;
     }
 
     private static String normalizeJsonContent(
@@ -729,21 +1245,13 @@ public final class OllamaClient {
         }
 
         String result =
-                content.trim();
+                content
+                        .replace(
+                                "\uFEFF",
+                                ""
+                        )
+                        .trim();
 
-        /*
-         * 兼容模型偶尔返回：
-         *
-         * ```json
-         * {...}
-         * ```
-         *
-         * 或：
-         *
-         * ```
-         * {...}
-         * ```
-         */
         if (result.startsWith("```")) {
             int firstLineEnd =
                     result.indexOf('\n');
@@ -766,16 +1274,6 @@ public final class OllamaClient {
             }
         }
 
-        /*
-         * 最后一层容错。
-         *
-         * 即便模型写成：
-         *
-         * 这是结果：
-         * {"translations":[...]}
-         *
-         * 也只截取 JSON object。
-         */
         int objectStart =
                 result.indexOf('{');
 
@@ -797,67 +1295,46 @@ public final class OllamaClient {
         return result.trim();
     }
 
+    private String abbreviate(
+            String value
+    ) {
+        if (value == null) {
+            return "";
+        }
 
+        String normalized =
+                value.trim();
 
-    private static final Map<String, Object>
-            TRANSLATION_RESPONSE_SCHEMA =
-            Map.of(
-                    "type",
-                    "object",
+        if (
+                normalized.length()
+                        <= maxLogContentChars
+        ) {
+            return normalized;
+        }
 
-                    "properties",
-                    Map.of(
-                            "translations",
-                            Map.of(
-                                    "type",
-                                    "array",
+        return normalized.substring(
+                0,
+                maxLogContentChars
+        ) + "...<truncated>";
+    }
 
-                                    "items",
-                                    Map.of(
-                                            "type",
-                                            "object",
+    private static void sleepQuietly(
+            long millis
+    ) {
+        if (millis <= 0) {
+            return;
+        }
 
-                                            "properties",
-                                            Map.of(
-                                                    "index",
-                                                    Map.of(
-                                                            "type",
-                                                            "integer"
-                                                    ),
-
-                                                    "text",
-                                                    Map.of(
-                                                            "type",
-                                                            "string"
-                                                    )
-                                            ),
-
-                                            "required",
-                                            List.of(
-                                                    "index",
-                                                    "text"
-                                            ),
-
-                                            "additionalProperties",
-                                            false
-                                    )
-                            )
-                    ),
-
-                    "required",
-                    List.of(
-                            "translations"
-                    ),
-
-                    "additionalProperties",
-                    false
+        try {
+            Thread.sleep(
+                    millis
             );
 
-    /*
-     * =========================================================
-     * 给 LyricsServiceImpl 使用的业务输入结构
-     * =========================================================
-     */
+        } catch (InterruptedException exception) {
+            Thread.currentThread()
+                    .interrupt();
+        }
+    }
 
     public record LyricsMatchTarget(
             String trackName,
@@ -865,6 +1342,14 @@ public final class OllamaClient {
             String albumName,
             int durationSeconds
     ) {
+        public LyricsMatchTarget {
+            artistNames =
+                    artistNames == null
+                            ? List.of()
+                            : List.copyOf(
+                            artistNames
+                    );
+        }
     }
 
     public record LyricsMatchCandidate(
@@ -890,11 +1375,11 @@ public final class OllamaClient {
     ) {
     }
 
-    /*
-     * =========================================================
-     * Ollama HTTP DTO
-     * =========================================================
-     */
+    private record TranslationLine(
+            int index,
+            String text
+    ) {
+    }
 
     private record ChatRequest(
             String model,
@@ -930,94 +1415,5 @@ public final class OllamaClient {
             String content,
             String thinking
     ) {
-    }
-
-    private record TranslationLine(
-            int index,
-            String text
-    ) {
-    }
-
-    @JsonIgnoreProperties(
-            ignoreUnknown = true
-    )
-    private static final class TranslationItem {
-
-        private int index;
-
-        private String text;
-
-
-        /*
-         * Jackson 反序列化需要无参构造器。
-         */
-        public TranslationItem() {
-        }
-
-
-        /*
-         * 继续保留 index()，
-         * 这样现有业务代码不用改。
-         */
-        public int index() {
-            return index;
-        }
-
-
-        public String text() {
-            return text;
-        }
-
-
-        public void setIndex(
-                int index
-        ) {
-            this.index =
-                    index;
-        }
-
-
-        public void setText(
-                String text
-        ) {
-            this.text =
-                    text;
-        }
-    }
-
-    @JsonIgnoreProperties(
-            ignoreUnknown = true
-    )
-    private static final class TranslationResponse {
-
-        private List<TranslationItem>
-                translations;
-
-
-        public TranslationResponse() {
-        }
-
-
-        /*
-         * 同样保留 translations()，
-         * 所以后面的：
-         *
-         * response.translations()
-         *
-         * 不需要修改。
-         */
-        public List<TranslationItem>
-        translations() {
-            return translations;
-        }
-
-
-        public void setTranslations(
-                List<TranslationItem>
-                        translations
-        ) {
-            this.translations =
-                    translations;
-        }
     }
 }

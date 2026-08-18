@@ -7,6 +7,13 @@ import com.avemonica.avemusic.music.api.service.LyricsService;
 import com.avemonica.avemusic.music.provider.client.LrclibClient;
 import com.avemonica.avemusic.music.provider.client
         .LrclibClient.LrclibRecord;
+import com.avemonica.avemusic.music.provider.client.NeteaseCloudMusicClient;
+import com.avemonica.avemusic.music.provider.client.NeteaseCloudMusicClient.NeteaseLyrics;
+import com.avemonica.avemusic.music.provider.client.NeteaseCloudMusicClient.NeteaseSong;
+import com.avemonica.avemusic.music.provider.service
+        .LyricsSourceResolver.LyricsTarget;
+import com.avemonica.avemusic.music.provider.service
+        .LyricsSourceResolver.ResolvedLyrics;
 import com.avemonica.avemusic.music.provider.entity.ArtistDO;
 import com.avemonica.avemusic.music.provider.entity.SongLyricsDO;
 import com.avemonica.avemusic.music.provider.mapper.ArtistMapper;
@@ -16,6 +23,7 @@ import com.avemonica.avemusic.music.provider.mapper.SongMapper;
 import com.avemonica.minirpc.core.exception.RpcBusinessException;
 import com.avemonica.minirpc.spring.annotation.MiniRpcService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.dao.DuplicateKeyException;
@@ -26,6 +34,7 @@ import com.avemonica.avemusic.music.provider.client
         .OllamaClient.LyricsMatchTarget;
 import com.avemonica.avemusic.music.provider.client
         .OllamaClient.MatchDecision;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -49,6 +58,9 @@ public class LyricsServiceImpl
     private final LrclibClient
             lrclibClient;
 
+    private final LyricsSourceResolver
+            lyricsSourceResolver;
+
     private final OllamaClient
             ollamaClient;
 
@@ -62,6 +74,21 @@ public class LyricsServiceImpl
             JSON_MAPPER =
             new ObjectMapper();
 
+    private final NeteaseCloudMusicClient
+            neteaseClient;
+
+    private static final String
+            PROVIDER_MANUAL =
+            "MANUAL";
+
+    private static final String
+            PROVIDER_LRCLIB =
+            "LRCLIB";
+
+    private static final String
+            PROVIDER_NETEASE =
+            "NETEASE";
+
     private static final Pattern
             LRC_TIME_PATTERN =
             Pattern.compile(
@@ -74,7 +101,9 @@ public class LyricsServiceImpl
             ArtistMapper artistMapper,
             SongArtistMapper songArtistMapper,
             LrclibClient lrclibClient,
-            OllamaClient ollamaClient
+            NeteaseCloudMusicClient neteaseClient,
+            OllamaClient ollamaClient,
+            LyricsSourceResolver lyricsSourceResolver
     ) {
         this.songMapper =
                 songMapper;
@@ -91,8 +120,142 @@ public class LyricsServiceImpl
         this.lrclibClient =
                 lrclibClient;
 
+        this.neteaseClient =
+                neteaseClient;
+
         this.ollamaClient =
                 ollamaClient;
+
+        this.lyricsSourceResolver =
+                lyricsSourceResolver;
+    }
+
+    @Override
+    public LyricsResult replaceManualLyrics(
+            String songId,
+            String fileName,
+            String content
+    ) {
+        Long resolvedSongId =
+                requiredId(
+                        songId
+                );
+
+        /*
+         * 管理端允许修改未上架歌曲，
+         * 所以这里只判断歌曲真实存在。
+         */
+        if (
+                songMapper.selectById(
+                        resolvedSongId
+                ) == null
+        ) {
+            throw new RpcBusinessException(
+                    MusicErrorCode
+                            .SONG_NOT_FOUND
+            );
+        }
+
+        String normalizedFileName =
+                fileName == null
+                        ? ""
+                        : fileName
+                        .trim()
+                        .toLowerCase(
+                                Locale.ROOT
+                        );
+
+        boolean lrc =
+                normalizedFileName
+                        .endsWith(
+                                ".lrc"
+                        );
+
+        boolean txt =
+                normalizedFileName
+                        .endsWith(
+                                ".txt"
+                        );
+
+        if (!lrc && !txt) {
+            throw new RpcBusinessException(
+                    MusicErrorCode
+                            .INVALID_PARAMETER,
+                    "仅支持 .lrc 或 .txt 歌词文件"
+            );
+        }
+
+        String normalizedContent =
+                normalizeUploadedLyrics(
+                        content
+                );
+
+        if (normalizedContent.isBlank()) {
+            throw new RpcBusinessException(
+                    MusicErrorCode
+                            .INVALID_PARAMETER,
+                    "歌词文件内容不能为空"
+            );
+        }
+
+
+        String plainLyrics;
+
+        String syncedLyrics;
+
+
+        if (lrc) {
+
+            /*
+             * LRC 至少必须存在一个时间标签，
+             * 防止用户把普通文本错误命名成 .lrc。
+             */
+            if (
+                    !containsLrcTimestamp(
+                            normalizedContent
+                    )
+            ) {
+                throw new RpcBusinessException(
+                        MusicErrorCode
+                                .INVALID_PARAMETER,
+                        "LRC歌词中未检测到时间标签"
+                );
+            }
+
+            syncedLyrics =
+                    normalizedContent;
+
+            plainLyrics =
+                    stripLrcTimestamps(
+                            normalizedContent
+                    );
+
+        } else {
+
+            /*
+             * TXT 不具备时间轴。
+             */
+            plainLyrics =
+                    normalizedContent;
+
+            syncedLyrics =
+                    null;
+        }
+
+
+        return replaceStoredLyrics(
+                resolvedSongId,
+
+                PROVIDER_MANUAL,
+
+                null,
+
+                false,
+
+                plainLyrics,
+
+                syncedLyrics
+        );
     }
 
     @Override
@@ -216,6 +379,104 @@ public class LyricsServiceImpl
     }
 
     @Override
+    @Transactional
+    public LyricsResult replaceLyricsFromSource(
+            String songId,
+            String source
+    ) {
+        Long resolvedSongId =
+                requiredId(songId);
+
+        String normalizedSource =
+                source == null
+                        ? ""
+                        : source
+                        .trim()
+                        .toUpperCase(
+                                Locale.ROOT
+                        );
+
+        if (
+                !"NETEASE".equals(
+                        normalizedSource
+                )
+                        && !"LRCLIB".equals(
+                        normalizedSource
+                )
+        ) {
+            throw new RpcBusinessException(
+                    MusicErrorCode.INVALID_PARAMETER,
+                    "歌词源只能是 NETEASE 或 LRCLIB"
+            );
+        }
+
+        LyricsTarget target =
+                buildLyricsTarget(
+                        resolvedSongId
+                );
+
+        ResolvedLyrics resolved =
+                lyricsSourceResolver
+                        .resolveFromSource(
+                                target,
+                                normalizedSource
+                        )
+                        .orElseThrow(
+                                () ->
+                                        new RpcBusinessException(
+                                                MusicErrorCode.INVALID_PARAMETER,
+                                                "指定歌词源未匹配到可用歌词："
+                                                        + normalizedSource
+                                        )
+                        );
+
+        /*
+         * 先成功获取新歌词，走到这里以后才修改数据库。
+         */
+        LocalDateTime now =
+                LocalDateTime.now();
+
+        SongLyricsDO entity =
+                findCached(
+                        resolvedSongId
+                );
+
+        boolean insert =
+                entity == null;
+
+        if (insert) {
+            entity =
+                    new SongLyricsDO();
+
+            entity.setSongId(
+                    resolvedSongId
+            );
+
+            entity.setCreatedAt(now);
+        }
+
+        applyResolvedLyrics(
+                entity,
+                resolved,
+                now
+        );
+
+        if (insert) {
+            songLyricsMapper.insert(
+                    entity
+            );
+        } else {
+            updateReplacedLyrics(
+                    entity
+            );
+        }
+
+        return toResult(
+                entity
+        );
+    }
+
+    @Override
     public LyricsResult getLyrics(
             String songId
     ) {
@@ -223,7 +484,7 @@ public class LyricsServiceImpl
                 requiredId(songId);
 
         /*
-         * 1. 优先查本地数据库。
+         * 1. 本地缓存永远优先。
          */
         SongLyricsDO cached =
                 findCached(
@@ -237,12 +498,44 @@ public class LyricsServiceImpl
         }
 
         /*
-         * 2. 查询本地歌曲元数据。
+         * 2. 读取歌曲元数据 + 音乐人所有别名。
          */
+        LyricsTarget target =
+                buildLyricsTarget(
+                        resolvedSongId
+                );
+
+        /*
+         * 3. 在线自动匹配：
+         *    NETEASE -> LRCLIB。
+         */
+        Optional<ResolvedLyrics> resolved =
+                lyricsSourceResolver.resolve(
+                        target
+                );
+
+        if (resolved.isEmpty()) {
+            return notFound(
+                    songId
+            );
+        }
+
+        /*
+         * 4. 只有成功拿到完整歌词以后才落库。
+         */
+        return persistFirstResolvedLyrics(
+                resolvedSongId,
+                resolved.get()
+        );
+    }
+
+    private LyricsTarget buildLyricsTarget(
+            Long songId
+    ) {
         Map<String, Object> meta =
                 songMapper
                         .selectLyricsMeta(
-                                resolvedSongId
+                                songId
                         );
 
         if (
@@ -250,8 +543,7 @@ public class LyricsServiceImpl
                         || meta.isEmpty()
         ) {
             throw new RpcBusinessException(
-                    MusicErrorCode
-                            .SONG_NOT_FOUND,
+                    MusicErrorCode.SONG_NOT_FOUND,
                     "歌曲不存在或当前不可播放"
             );
         }
@@ -262,7 +554,14 @@ public class LyricsServiceImpl
                         "songName"
                 );
 
-        String artistName =
+        if (songName.isBlank()) {
+            throw new RpcBusinessException(
+                    MusicErrorCode.INVALID_PARAMETER,
+                    "歌曲名称为空，无法匹配歌词"
+            );
+        }
+
+        String fallbackArtistName =
                 text(
                         meta,
                         "artistName"
@@ -280,233 +579,401 @@ public class LyricsServiceImpl
                         "durationSeconds"
                 );
 
-        /*
-         * 第一阶段只做精确匹配。
-         *
-         * 没有专辑、音乐人或时长时，
-         * 不猜测，不让模型生成歌词。
-         */
-        if (
-                songName.isBlank()
-                        || artistName.isBlank()
-                        || albumName.isBlank()
-                        || durationSeconds <= 0
-        ) {
-            return notFound(
-                    songId
-            );
-        }
-
-        /*
-         * 3. 调用 LRCLIB 精确查询。
-         */
-        List<String> artistCandidates =
+        List<String> artistNames =
                 resolveArtistNameCandidates(
-                        resolvedSongId,
-                        artistName
+                        songId,
+                        fallbackArtistName
                 );
 
-        Optional<LrclibRecord> matched =
-                Optional.empty();
+        return new LyricsTarget(
+                songName,
+                artistNames,
+                albumName,
+                durationSeconds
+        );
+    }
 
+
+    private LyricsResult persistFirstResolvedLyrics(
+            Long songId,
+            ResolvedLyrics resolved
+    ) {
+        LocalDateTime now =
+                LocalDateTime.now();
+
+        SongLyricsDO entity =
+                new SongLyricsDO();
+
+        entity.setSongId(
+                songId
+        );
+
+        applyResolvedLyrics(
+                entity,
+                resolved,
+                now
+        );
+
+        entity.setCreatedAt(now);
+
+        try {
+            songLyricsMapper.insert(
+                    entity
+            );
+
+        } catch (DuplicateKeyException exception) {
+            /*
+             * 两个并发首查只允许一个 insert 成功。
+             */
+            SongLyricsDO existing =
+                    findCached(
+                            songId
+                    );
+
+            if (existing != null) {
+                return toResult(
+                        existing
+                );
+            }
+
+            throw exception;
+        }
+
+        return toResult(
+                entity
+        );
+    }
+
+
+    private static void applyResolvedLyrics(
+            SongLyricsDO entity,
+            ResolvedLyrics resolved,
+            LocalDateTime now
+    ) {
+        entity.setProvider(
+                resolved.provider()
+        );
+
+        entity.setProviderLyricId(
+                resolved.providerLyricId()
+        );
+
+        entity.setInstrumental(
+                resolved.instrumental()
+        );
+
+        entity.setPlainLyrics(
+                resolved.plainLyrics()
+        );
+
+        entity.setSyncedLyrics(
+                resolved.syncedLyrics()
+        );
+
+        /*
+         * 新歌词必须让旧 AI 翻译失效。
+         */
+        entity.setTranslationJson(
+                null
+        );
+
+        entity.setStatus(
+                "MATCHED"
+        );
+
+        entity.setMatchedAt(now);
+        entity.setUpdatedAt(now);
+    }
+
+    private Optional<LrclibRecord>
+    findFromLrclib(
+            String songName,
+            List<String> artistNames,
+            String albumName,
+            int durationSeconds
+    ) {
+        /*
+         * 1. 精确查询。
+         */
         for (
                 int index = 0;
-                index < artistCandidates.size();
+                index < artistNames.size();
                 index++
         ) {
-            String candidate =
-                    artistCandidates.get(
+            String artistName =
+                    artistNames.get(
                             index
                     );
 
-            System.out.println(
-                    "[Lyrics] 尝试 LRCLIB："
-                            + "song=" + songName
-                            + ", artist=" + candidate
-                            + ", album=" + albumName
-                            + ", duration="
-                            + durationSeconds
-            );
-
-            /*
-             * 第二个候选开始稍微间隔一下，
-             * 避免连续快速请求 LRCLIB。
-             */
             if (index > 0) {
-                sleepQuietly(250);
+                sleepQuietly(
+                        250
+                );
             }
 
-            Optional<LrclibRecord> current =
+            Optional<LrclibRecord>
+                    exact =
                     lrclibClient.getExact(
                             songName,
-                            candidate,
+                            artistName,
                             albumName,
                             durationSeconds
                     );
 
-            if (current.isPresent()) {
-                matched = current;
-
-                System.out.println(
-                        "[Lyrics] 匹配成功，artist="
-                                + candidate
-                );
-
-                break;
+            if (exact.isPresent()) {
+                return exact;
             }
         }
 
-        /*
-         * =========================================================
-         * 4. 精确匹配成功
-         * =========================================================
-         */
-        if (matched.isPresent()) {
-            return saveMatchedLyrics(
-                    resolvedSongId,
-                    matched.get()
-            );
-        }
 
         /*
-         * =========================================================
-         * 5. 精确匹配失败：
-         *    LRCLIB /api/search 模糊召回
-         * =========================================================
+         * 2. 模糊搜索。
          */
-        System.out.println(
-                "[Lyrics] 精确匹配失败，"
-                        + "进入第二阶段模糊检索"
-        );
-
         List<LrclibRecord> searched =
                 searchCandidates(
                         songName,
-                        artistCandidates
+                        artistNames
                 );
 
-        System.out.println(
-                "[Lyrics] LRCLIB原始候选数="
-                        + searched.size()
-        );
-
         if (searched.isEmpty()) {
-            return notFound(
-                    songId
-            );
+            return Optional.empty();
         }
 
+
         /*
-         * =========================================================
-         * 6. Java 本地规则评分
-         * =========================================================
+         * 3. Java 本地评分。
          */
-        List<ScoredLyricsCandidate> scored =
+        List<ScoredLyricsCandidate>
+                scored =
                 scoreCandidates(
                         songName,
-                        artistCandidates,
+                        artistNames,
                         albumName,
                         durationSeconds,
                         searched
                 );
 
-        System.out.println(
-                "[Lyrics] 本地评分后候选数="
-                        + scored.size()
-        );
-
-        for (
-                ScoredLyricsCandidate candidate
-                : scored
-        ) {
-            System.out.println(
-                    "[Lyrics] candidate="
-                            + candidate.record().id()
-                            + ", track="
-                            + candidate.record()
-                            .trackName()
-                            + ", artist="
-                            + candidate.record()
-                            .artistName()
-                            + ", album="
-                            + candidate.record()
-                            .albumName()
-                            + ", duration="
-                            + candidate.record()
-                            .duration()
-                            + ", score="
-                            + String.format(
-                            Locale.ROOT,
-                            "%.3f",
-                            candidate.score()
-                    )
-            );
-        }
-
         if (scored.isEmpty()) {
-            return notFound(
-                    songId
-            );
+            return Optional.empty();
         }
+
 
         /*
-         * =========================================================
-         * 7. 本地规则已经非常确定：
-         *    不调用 Qwen，直接采用。
-         * =========================================================
+         * 4. 高置信直接采用。
          */
         if (canAutoAccept(scored)) {
-
-            ScoredLyricsCandidate best =
-                    scored.get(0);
-
-            System.out.println(
-                    "[Lyrics] Java高置信直接匹配："
-                            + "id="
-                            + best.record().id()
-                            + ", score="
-                            + best.score()
-            );
-
-            return saveMatchedLyrics(
-                    resolvedSongId,
-                    best.record()
+            return Optional.of(
+                    scored.get(0)
+                            .record()
             );
         }
 
+
         /*
-         * =========================================================
-         * 8. 候选存在歧义：
-         *    交给 Qwen3.5 做候选消歧。
-         * =========================================================
+         * 5. 交给 Qwen 消歧。
          */
-        Optional<LrclibRecord> aiMatched =
-                selectWithQwen(
+        return selectWithQwen(
+                songName,
+                artistNames,
+                albumName,
+                durationSeconds,
+                scored
+        );
+    }
+
+    private LyricsResult fallbackToNetease(
+            String songId,
+            Long resolvedSongId,
+            String songName,
+            List<String> artistCandidates,
+            String albumName,
+            int durationSeconds
+    ) {
+        System.out.println(
+                "[Lyrics] LRCLIB未找到歌词，"
+                        + "开始尝试 NeteaseCloudMusicApi"
+        );
+
+        Optional<NeteaseLyrics> neteaseLyrics =
+                findFromNetease(
                         songName,
                         artistCandidates,
                         albumName,
-                        durationSeconds,
-                        scored
+                        durationSeconds
                 );
 
-        if (aiMatched.isEmpty()) {
+        if (neteaseLyrics.isPresent()) {
+
             System.out.println(
-                    "[Lyrics] Qwen未能确认候选"
+                    "[Lyrics] Netease歌词匹配成功，"
+                            + "songId="
+                            + neteaseLyrics
+                            .get()
+                            .songId()
             );
 
-            return notFound(
-                    songId
+            return saveNeteaseLyrics(
+                    resolvedSongId,
+                    neteaseLyrics.get()
             );
         }
 
+        System.out.println(
+                "[Lyrics] 所有歌词来源均未匹配成功"
+        );
+
+        return notFound(
+                songId
+        );
+    }
+
+    private static String
+    stripLrcTimestamps(
+            String syncedLyrics
+    ) {
+        if (
+                syncedLyrics == null
+                        || syncedLyrics.isBlank()
+        ) {
+            return "";
+        }
+
+        Pattern timestampPattern =
+                Pattern.compile(
+                        "\\[\\d{1,3}:"
+                                + "\\d{2}"
+                                + "(?:\\.\\d{1,3})?]"
+                );
+
+        Pattern metadataPattern =
+                Pattern.compile(
+                        "^\\[(ar|ti|al|by|offset|re|ve):.*]$",
+                        Pattern.CASE_INSENSITIVE
+                );
+
+        return Arrays
+                .stream(
+                        syncedLyrics
+                                .split("\\R")
+                )
+                .map(
+                        String::trim
+                )
+                .filter(
+                        line ->
+                                !metadataPattern
+                                        .matcher(line)
+                                        .matches()
+                )
+                .map(
+                        line ->
+                                timestampPattern
+                                        .matcher(line)
+                                        .replaceAll("")
+                                        .trim()
+                )
+                .filter(
+                        line ->
+                                !line.isBlank()
+                )
+                .collect(
+                        java.util.stream
+                                .Collectors
+                                .joining("\n")
+                );
+    }
+
+    private LyricsResult saveNeteaseLyrics(
+            Long songId,
+            NeteaseLyrics lyric
+    ) {
+        String syncedLyrics =
+                lyric.syncedLyrics();
+
         /*
-         * =========================================================
-         * 9. Qwen确认成功
-         * =========================================================
+         * 根据 LRC 同时生成普通歌词。
          */
-        return saveMatchedLyrics(
-                resolvedSongId,
-                aiMatched.get()
+        String plainLyrics =
+                stripLrcTimestamps(
+                        syncedLyrics
+                );
+
+        LocalDateTime now =
+                LocalDateTime.now();
+
+        SongLyricsDO entity =
+                new SongLyricsDO();
+
+        entity.setSongId(
+                songId
+        );
+
+        entity.setProvider(
+                "NETEASE"
+        );
+
+        entity.setProviderLyricId(
+                Long.toString(
+                        lyric.songId()
+                )
+        );
+
+        entity.setInstrumental(
+                false
+        );
+
+        entity.setPlainLyrics(
+                plainLyrics
+        );
+
+        entity.setSyncedLyrics(
+                syncedLyrics
+        );
+
+        entity.setTranslationJson(
+                null
+        );
+
+        entity.setStatus(
+                "MATCHED"
+        );
+
+        entity.setMatchedAt(
+                now
+        );
+
+        entity.setCreatedAt(
+                now
+        );
+
+        entity.setUpdatedAt(
+                now
+        );
+
+        try {
+            songLyricsMapper.insert(
+                    entity
+            );
+
+        } catch (
+                DuplicateKeyException exception
+        ) {
+            SongLyricsDO existing =
+                    findCached(
+                            songId
+                    );
+
+            if (existing != null) {
+                return toResult(
+                        existing
+                );
+            }
+
+            throw exception;
+        }
+
+        return toResult(
+                entity
         );
     }
 
@@ -694,6 +1161,177 @@ public class LyricsServiceImpl
         return toResult(
                 entity
         );
+    }
+
+    private LyricsResult replaceStoredLyrics(
+            Long songId,
+            String provider,
+            String providerLyricId,
+            boolean instrumental,
+            String plainLyrics,
+            String syncedLyrics
+    ) {
+        LocalDateTime now =
+                LocalDateTime.now();
+
+        SongLyricsDO entity =
+                findCached(
+                        songId
+                );
+
+        boolean create =
+                entity == null;
+
+        if (create) {
+            entity =
+                    new SongLyricsDO();
+
+            entity.setSongId(
+                    songId
+            );
+
+            entity.setCreatedAt(
+                    now
+            );
+        }
+
+        entity.setProvider(
+                provider
+        );
+
+        entity.setProviderLyricId(
+                providerLyricId
+        );
+
+        entity.setInstrumental(
+                instrumental
+        );
+
+        entity.setPlainLyrics(
+                plainLyrics
+        );
+
+        entity.setSyncedLyrics(
+                syncedLyrics
+        );
+
+        /*
+         * 歌词内容发生变化后，
+         * 原 AI 翻译必须作废。
+         */
+        entity.setTranslationJson(
+                null
+        );
+
+        entity.setStatus(
+                "MATCHED"
+        );
+
+        entity.setMatchedAt(
+                now
+        );
+
+        entity.setUpdatedAt(
+                now
+        );
+
+        if (create) {
+            songLyricsMapper.insert(
+                    entity
+            );
+        } else {
+            updateReplacedLyrics(
+                    entity
+            );
+        }
+
+        return toResult(
+                entity
+        );
+    }
+
+    /**
+     * 管理端替换歌词时使用显式 SET。
+     *
+     * 不能只依赖 updateById(entity)：
+     * MyBatis-Plus 默认情况下可能忽略值为 null 的字段，
+     * 从而导致 translation_json 仍保留旧 AI 翻译。
+     *
+     * 同理，人工 TXT 歌词的 synced_lyrics=null、
+     * MANUAL 的 provider_lyric_id=null 也必须真正写入数据库。
+     */
+    private void updateReplacedLyrics(
+            SongLyricsDO entity
+    ) {
+        int updated =
+                songLyricsMapper.update(
+                        null,
+                        new LambdaUpdateWrapper<
+                                SongLyricsDO
+                                >()
+                                .eq(
+                                        SongLyricsDO
+                                                ::getSongId,
+                                        entity.getSongId()
+                                )
+                                .set(
+                                        SongLyricsDO
+                                                ::getProvider,
+                                        entity.getProvider()
+                                )
+                                .set(
+                                        SongLyricsDO
+                                                ::getProviderLyricId,
+                                        entity.getProviderLyricId()
+                                )
+                                .set(
+                                        SongLyricsDO
+                                                ::getInstrumental,
+                                        entity.getInstrumental()
+                                )
+                                .set(
+                                        SongLyricsDO
+                                                ::getPlainLyrics,
+                                        entity.getPlainLyrics()
+                                )
+                                .set(
+                                        SongLyricsDO
+                                                ::getSyncedLyrics,
+                                        entity.getSyncedLyrics()
+                                )
+                                /*
+                                 * 关键：
+                                 * 无论旧翻译是什么，
+                                 * 替换原歌词后都强制写成 SQL NULL。
+                                 */
+                                .set(
+                                        SongLyricsDO
+                                                ::getTranslationJson,
+                                        null
+                                )
+                                .set(
+                                        SongLyricsDO
+                                                ::getStatus,
+                                        entity.getStatus()
+                                )
+                                .set(
+                                        SongLyricsDO
+                                                ::getMatchedAt,
+                                        entity.getMatchedAt()
+                                )
+                                .set(
+                                        SongLyricsDO
+                                                ::getUpdatedAt,
+                                        entity.getUpdatedAt()
+                                )
+                );
+
+        if (updated != 1) {
+            throw new IllegalStateException(
+                    "歌词替换更新失败，songId="
+                            + entity.getSongId()
+            );
+        }
     }
 
     private List<LrclibRecord>
@@ -922,9 +1560,9 @@ public class LyricsServiceImpl
             String fallbackArtistName
     ) {
         LinkedHashMap<
-                        String,
-                        String
-                        > result =
+                String,
+                String
+                > result =
                 new LinkedHashMap<>();
 
         /*
@@ -1233,6 +1871,68 @@ public class LyricsServiceImpl
                 .toList();
     }
 
+    private static String
+    normalizeUploadedLyrics(
+            String content
+    ) {
+        if (content == null) {
+            return "";
+        }
+
+        String value =
+                content;
+
+        /*
+         * 去掉 UTF-8 BOM。
+         */
+        if (
+                !value.isEmpty()
+                        && value.charAt(0)
+                        == '\uFEFF'
+        ) {
+            value =
+                    value.substring(1);
+        }
+
+        /*
+         * 统一换行。
+         */
+        value =
+                value.replace(
+                                "\r\n",
+                                "\n"
+                        )
+                        .replace(
+                                '\r',
+                                '\n'
+                        );
+
+        return value.strip();
+    }
+
+    private static boolean
+    containsLrcTimestamp(
+            String lyrics
+    ) {
+        if (
+                lyrics == null
+                        || lyrics.isBlank()
+        ) {
+            return false;
+        }
+
+        return Pattern
+                .compile(
+                        "\\[\\d{1,3}:"
+                                + "\\d{2}"
+                                + "(?:\\.\\d{1,3})?]"
+                )
+                .matcher(
+                        lyrics
+                )
+                .find();
+    }
+
     private static double calculateScore(
             String songName,
             List<String> artistNames,
@@ -1352,6 +2052,334 @@ public class LyricsServiceImpl
         return 0.0;
     }
 
+    private List<ScoredNeteaseCandidate>
+    scoreNeteaseCandidates(
+            String songName,
+            List<String> artistNames,
+            String albumName,
+            int durationSeconds,
+            List<NeteaseCloudMusicClient.NeteaseSong> candidates
+    ) {
+        return candidates
+                .stream()
+                .map(
+                        candidate ->
+                                new ScoredNeteaseCandidate(
+                                        candidate,
+
+                                        calculateNeteaseScore(
+                                                songName,
+                                                artistNames,
+                                                albumName,
+                                                durationSeconds,
+                                                candidate
+                                        )
+                                )
+                )
+                /*
+                 * 先排除明显不相关结果。
+                 */
+                .filter(
+                        candidate ->
+                                candidate.score()
+                                        >= 0.50
+                )
+                .sorted(
+                        Comparator
+                                .comparingDouble(
+                                        ScoredNeteaseCandidate
+                                                ::score
+                                )
+                                .reversed()
+                )
+                .limit(5)
+                .toList();
+    }
+
+    private List<NeteaseSong>
+    searchNeteaseCandidates(
+            String songName,
+            List<String> artistNames
+    ) {
+        Map<Long, NeteaseSong> unique =
+                new LinkedHashMap<>();
+
+        for (
+                int index = 0;
+                index < artistNames.size();
+                index++
+        ) {
+            String artistName =
+                    artistNames.get(
+                            index
+                    );
+
+            if (index > 0) {
+                sleepQuietly(
+                        150
+                );
+            }
+
+            System.out.println(
+                    "[Lyrics-Netease] 搜索："
+                            + "song="
+                            + songName
+                            + ", artist="
+                            + artistName
+            );
+
+            List<NeteaseCloudMusicClient.NeteaseSong> songs =
+                    neteaseClient.search(
+                            songName,
+                            artistName
+                    );
+
+            for (NeteaseCloudMusicClient.NeteaseSong song : songs) {
+                unique.putIfAbsent(
+                        song.id(),
+                        song
+                );
+            }
+        }
+
+        return List.copyOf(
+                unique.values()
+        );
+    }
+
+    private static double
+    calculateNeteaseScore(
+            String songName,
+            List<String> artistNames,
+            String albumName,
+            int durationSeconds,
+            NeteaseCloudMusicClient.NeteaseSong candidate
+    ) {
+        double track =
+                textScore(
+                        songName,
+                        candidate.trackName()
+                );
+
+        double artist =
+                artistScore(
+                        artistNames,
+                        candidate.artistName()
+                );
+
+        double album =
+                textScore(
+                        albumName,
+                        candidate.albumName()
+                );
+
+        double duration =
+                durationScore(
+                        durationSeconds,
+                        candidate.durationSeconds()
+                );
+
+        /*
+         * 与 LRCLIB 保持同一套权重。
+         */
+        return track * 0.40
+                + artist * 0.30
+                + duration * 0.20
+                + album * 0.10;
+    }
+
+    private Optional<NeteaseLyrics>
+    findFromNetease(
+            String songName,
+            List<String> artistNames,
+            String albumName,
+            int durationSeconds
+    ) {
+        List<NeteaseSong> searched =
+                searchNeteaseCandidates(
+                        songName,
+                        artistNames
+                );
+
+        if (searched.isEmpty()) {
+            return Optional.empty();
+        }
+
+        List<ScoredNeteaseCandidate>
+                scored =
+                scoreNeteaseCandidates(
+                        songName,
+                        artistNames,
+                        albumName,
+                        durationSeconds,
+                        searched
+                );
+
+        if (scored.isEmpty()) {
+            return Optional.empty();
+        }
+
+        for (
+                ScoredNeteaseCandidate item
+                : scored
+        ) {
+            System.out.println(
+                    "[Lyrics-Netease] candidate="
+                            + item.song().id()
+                            + ", track="
+                            + item.song()
+                            .trackName()
+                            + ", artist="
+                            + item.song()
+                            .artistName()
+                            + ", album="
+                            + item.song()
+                            .albumName()
+                            + ", duration="
+                            + item.song()
+                            .durationSeconds()
+                            + ", score="
+                            + String.format(
+                            Locale.ROOT,
+                            "%.3f",
+                            item.score()
+                    )
+            );
+        }
+
+        /*
+         * 高分结果：
+         * Java直接采用。
+         */
+        if (
+                canAutoAcceptNetease(
+                        scored
+                )
+        ) {
+            return neteaseClient.getLyrics(
+                    scored.get(0)
+                            .song()
+                            .id()
+            );
+        }
+
+        /*
+         * 有歧义：
+         * 继续让当前 Qwen 候选选择器处理。
+         */
+        List<
+                OllamaClient.LyricsMatchCandidate
+                > aiCandidates =
+                scored
+                        .stream()
+                        .map(
+                                item ->
+                                        new OllamaClient
+                                                .LyricsMatchCandidate(
+                                                item.song()
+                                                        .id(),
+
+                                                item.song()
+                                                        .trackName(),
+
+                                                item.song()
+                                                        .artistName(),
+
+                                                item.song()
+                                                        .albumName(),
+
+                                                item.song()
+                                                        .durationSeconds(),
+
+                                                item.score()
+                                        )
+                        )
+                        .toList();
+
+        OllamaClient.LyricsMatchTarget target =
+                new OllamaClient
+                        .LyricsMatchTarget(
+                        songName,
+                        artistNames,
+                        albumName,
+                        durationSeconds
+                );
+
+        Optional<
+                OllamaClient.MatchDecision
+                > decision =
+                ollamaClient
+                        .selectLyricsCandidate(
+                                target,
+                                aiCandidates
+                        );
+
+        if (
+                decision.isEmpty()
+                        || !decision.get()
+                        .matched()
+                        || decision.get()
+                        .confidence()
+                        < 0.75
+        ) {
+            return Optional.empty();
+        }
+
+        long selectedId =
+                decision.get()
+                        .selectedId();
+
+        /*
+         * 再次保证模型不能凭空生成 ID。
+         */
+        boolean exists =
+                scored
+                        .stream()
+                        .anyMatch(
+                                item ->
+                                        item.song()
+                                                .id()
+                                                == selectedId
+                        );
+
+        if (!exists) {
+            return Optional.empty();
+        }
+
+        return neteaseClient.getLyrics(
+                selectedId
+        );
+    }
+
+    private static boolean
+    canAutoAcceptNetease(
+            List<ScoredNeteaseCandidate>
+                    candidates
+    ) {
+        if (candidates.isEmpty()) {
+            return false;
+        }
+
+        double first =
+                candidates.get(0)
+                        .score();
+
+        if (first < 0.90) {
+            return false;
+        }
+
+        if (candidates.size() == 1) {
+            return true;
+        }
+
+        double second =
+                candidates.get(1)
+                        .score();
+
+        return first - second
+                >= 0.15;
+    }
+
     private static String normalizeForMatch(
             String value
     ) {
@@ -1379,6 +2407,12 @@ public class LyricsServiceImpl
     private record TimedText(
             double time,
             String text
+    ) {
+    }
+
+    private record ScoredNeteaseCandidate(
+            NeteaseCloudMusicClient.NeteaseSong song,
+            double score
     ) {
     }
 }

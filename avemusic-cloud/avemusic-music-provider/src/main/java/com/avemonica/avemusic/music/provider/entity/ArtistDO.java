@@ -26,6 +26,8 @@ public class ArtistDO {
     private String introduction;
     private String avatarUrl;
     private String countryRegion;
+    private String areaCode;
+    private String artistType;
 
     @TableField(
             value = "translated_name",

@@ -8,8 +8,11 @@ import {
 import {
     createArtist,
     updateArtist,
+
     type ArtistManagementItem,
     type ArtistSearchItem,
+    type CreateArtistRequest,
+    type EditableArtistType,
 } from "../../api/management";
 
 import { uploadFile } from "../../api/file";
@@ -25,16 +28,20 @@ interface ArtistCreateDrawerProps {
     onSaved?(): Promise<void> | void;
 }
 
+
 interface ArtistFormState {
     name: string;
     countryRegion: string;
+    artistType: EditableArtistType | "";
     style: string;
     introduction: string;
 }
 
-const initialForm: ArtistFormState = {
+const initialForm:
+    ArtistFormState = {
     name: "",
     countryRegion: "",
+    artistType: "",
     style: "",
     introduction: "",
 };
@@ -107,6 +114,12 @@ export default function ArtistCreateDrawer({
         setForm({
             name: artist.name,
             countryRegion: artist.countryRegion ?? "",
+            artistType:
+                artist.artistType === "MALE"
+                || artist.artistType === "FEMALE"
+                || artist.artistType === "BAND"
+                    ? artist.artistType
+                    : "",
             style: artist.style ?? "",
             introduction: artist.introduction ?? "",
         });
@@ -286,6 +299,8 @@ export default function ArtistCreateDrawer({
         const name = form.name.trim();
         const countryRegion =
             form.countryRegion.trim();
+        const artistType =
+            form.artistType;
 
         const resolvedTranslatedNames =
             translatedNames
@@ -307,12 +322,23 @@ export default function ArtistCreateDrawer({
                 );
 
         if (name.length === 0) {
-            setError("请输入音乐人名称");
+            setError(
+                "请输入音乐人名称",
+            );
             return;
         }
 
         if (countryRegion.length === 0) {
-            setError("请输入国家或地区");
+            setError(
+                "请输入国家或地区",
+            );
+            return;
+        }
+
+        if (artistType === "") {
+            setError(
+                "请选择音乐人类型",
+            );
             return;
         }
 
@@ -345,17 +371,15 @@ export default function ArtistCreateDrawer({
                     : "正在保存音乐人修改...",
             );
 
-            const request = {
+            const request:
+                CreateArtistRequest = {
                 name,
                 translatedNames:
                 resolvedTranslatedNames,
                 countryRegion,
-                style:
-                    form.style.trim()
-                    || null,
-                introduction:
-                    form.introduction.trim()
-                    || null,
+                artistType,
+                style: form.style.trim() || null,
+                introduction: form.introduction.trim() || null,
                 avatarUrl,
             };
 
@@ -576,6 +600,62 @@ export default function ArtistCreateDrawer({
                             <option value="其他海外地区" />
                         </datalist>
                     </label>
+
+                    <div className="song-form-field">
+                        <span>
+                            音乐人类型
+                            <b>*</b>
+                        </span>
+
+                        <div
+                            className="artist-type-options"
+                            role="group"
+                            aria-label="音乐人类型"
+                        >
+                            {[
+                                {
+                                    value: "MALE",
+                                    label: "男歌手",
+                                },
+                                {
+                                    value: "FEMALE",
+                                    label: "女歌手",
+                                },
+                                {
+                                    value: "BAND",
+                                    label: "乐队组合",
+                                },
+                            ].map((option) => (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    className={
+                                        form.artistType
+                                        === option.value
+                                            ? "artist-type-option active"
+                                            : "artist-type-option"
+                                    }
+                                    aria-pressed={
+                                        form.artistType
+                                        === option.value
+                                    }
+                                    disabled={submitting}
+                                    onClick={() =>
+                                        updateField(
+                                            "artistType",
+                                            option.value,
+                                        )
+                                    }
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        <small>
+                            用于 C 端歌手页的男歌手、女歌手、乐队组合筛选。
+                        </small>
+                    </div>
 
                     <label className="song-form-field">
                         <span>音乐风格</span>

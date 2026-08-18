@@ -7,4 +7,10 @@ import java.util.List;
 public interface UserManagementService {
 
     List<UserItem> listUsers();
+
+    void updateUserRole(
+            String targetUserId,
+            String role,
+            String operatorUserId
+    );
 }

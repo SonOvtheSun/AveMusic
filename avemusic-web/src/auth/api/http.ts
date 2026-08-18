@@ -23,8 +23,7 @@ interface RetryRequestConfig
 }
 
 const API_BASE_URL =
-    import.meta.env.VITE_API_BASE_URL
-    ?? "http://localhost:8080/api";
+    "/api";
 
 const ACCESS_TOKEN_KEY =
     "avemusic.access-token";
@@ -38,15 +37,33 @@ const REFRESH_TOKEN_KEY =
  * 普通对象由 Axios 自动发送 JSON；
  * FormData 由浏览器自动生成 multipart boundary。
  */
-export const http = axios.create({
-    baseURL: API_BASE_URL,
-    timeout: 8000,
-});
+export const http =
+    axios.create({
+        baseURL:
+        API_BASE_URL,
 
-const refreshHttp = axios.create({
-    baseURL: API_BASE_URL,
-    timeout: 8000,
-});
+        timeout:
+            8000,
+
+        headers: {
+            "Content-Type":
+                "application/json",
+        },
+    });
+
+const refreshHttp =
+    axios.create({
+        baseURL:
+        API_BASE_URL,
+
+        timeout:
+            8000,
+
+        headers: {
+            "Content-Type":
+                "application/json",
+        },
+    });
 
 export function getAccessToken():
     string | null {

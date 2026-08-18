@@ -74,6 +74,147 @@ public interface AlbumMapper
     );
 
     @Select("""
+        <script>
+
+        SELECT
+            CAST(album.id AS CHAR)
+                AS id,
+
+            album.name
+                AS name,
+
+            COALESCE(
+                GROUP_CONCAT(
+                    DISTINCT artist.name
+                    ORDER BY artist.name
+                    SEPARATOR ' / '
+                ),
+                '未知音乐人'
+            ) AS subtitle,
+
+            album.cover_url
+                AS coverUrl,
+
+            NULL
+                AS audioUrl,
+
+            0
+                AS durationSeconds,
+
+            0
+                AS popularity,
+
+            COALESCE(
+                GROUP_CONCAT(
+                    DISTINCT CAST(
+                        artist.id AS CHAR
+                    )
+                    ORDER BY artist.name
+                    SEPARATOR ','
+                ),
+                ''
+            ) AS artistIds
+
+        FROM album_tb album
+
+        LEFT JOIN artist_album_tb relation
+            ON relation.album_id =
+               album.id
+
+        LEFT JOIN singer_tb artist
+            ON artist.id =
+               relation.artist_id
+
+        WHERE
+            album.audit_status =
+                'APPROVED'
+
+            AND (
+                <foreach
+                    collection="keywords"
+                    item="keyword"
+                    separator=" OR "
+                >
+
+                    (
+                        album.name LIKE
+                            CONCAT(
+                                '%',
+                                #{keyword},
+                                '%'
+                            )
+
+                        OR artist.name LIKE
+                            CONCAT(
+                                '%',
+                                #{keyword},
+                                '%'
+                            )
+
+                        OR artist.translated_name LIKE
+                            CONCAT(
+                                '%',
+                                #{keyword},
+                                '%'
+                            )
+                    )
+
+                </foreach>
+            )
+
+        GROUP BY
+            album.id,
+            album.name,
+            album.cover_url,
+            album.release_date
+
+        ORDER BY
+
+            CASE
+
+                WHEN album.name =
+                        #{originalKeyword}
+                    THEN 0
+
+                WHEN album.name LIKE
+                        CONCAT(
+                            #{originalKeyword},
+                            '%'
+                        )
+                    THEN 1
+
+                WHEN album.name LIKE
+                        CONCAT(
+                            '%',
+                            #{originalKeyword},
+                            '%'
+                        )
+                    THEN 2
+
+                ELSE 3
+
+            END,
+
+            album.release_date DESC,
+            album.id DESC
+
+        LIMIT #{limit}
+
+        </script>
+        """)
+    List<Map<String, Object>>
+    searchPublic(
+            @Param("keywords")
+            List<String> keywords,
+
+            @Param("originalKeyword")
+            String originalKeyword,
+
+            @Param("limit")
+            int limit
+    );
+
+    @Select("""
             SELECT
                 CAST(album.id AS CHAR) AS albumId,
                 album.name AS albumName,

@@ -2,18 +2,11 @@ package com.avemonica.avemusic.gateway.controller.file;
 
 import com.avemonica.avemusic.common.web.ApiResult;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.Resource;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.http.*;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.Set;
 import java.util.UUID;
@@ -31,6 +24,9 @@ public final class FileController {
 
     private static final String TICKET_PREFIX =
             "avemusic:file:upload-ticket:";
+
+    private static final long AUDIO_CHUNK_THRESHOLD_BYTES =
+            2L * 1024L * 1024L;
 
     private final StringRedisTemplate redisTemplate;
 
@@ -96,17 +92,28 @@ public final class FileController {
                         + "|"
                         + body.size();
 
+        /*
+         * 大音频会拆成多个 5 MiB 分片逐个上传。
+         * 300 MB 文件在较慢公网环境下可能持续几十分钟，
+         * 因此分片上传 ticket 不能再只有 60 秒。
+         */
+        Duration ticketTtl =
+                "audio".equals(category)
+                        && body.size()
+                        > AUDIO_CHUNK_THRESHOLD_BYTES
+                        ? Duration.ofHours(2)
+                        : Duration.ofMinutes(5);
+
         redisTemplate
                 .opsForValue()
                 .set(
                         key,
                         value,
-                        Duration.ofSeconds(60)
+                        ticketTtl
                 );
 
         String uploadUrl =
-                publicUploadBaseUrl
-                        + "/upload/files/"
+                "/upload/files/"
                         + category;
 
         return ApiResult.success(

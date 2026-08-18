@@ -11,6 +11,7 @@ import com.avemonica.avemusic.music.api.dto.MusicManagementModels.BatchDeleteReq
 import com.avemonica.avemusic.music.api.dto.MusicManagementModels.CreateArtistRequest;
 import com.avemonica.avemusic.music.api.dto.MusicManagementModels.UpdateArtistRequest;
 import com.avemonica.avemusic.music.api.dto.MusicManagementModels.ReviewRequest;
+import com.avemonica.avemusic.music.api.dto.MusicModels.ArtistDirectoryResult;
 import com.avemonica.avemusic.music.api.dto.MusicModels.ArtistCard;
 import com.avemonica.avemusic.music.api.service.MusicService;
 import com.avemonica.minirpc.spring.annotation.MiniRpcReference;
@@ -145,11 +146,14 @@ public class ArtistController {
 
                                 body.countryRegion(),
 
+                                body.artistType(),
+
                                 body.style(),
 
                                 body.introduction(),
 
                                 body.avatarUrl(),
+
 
                                 actorResolver.resolve(
                                         authentication
@@ -181,6 +185,8 @@ public class ArtistController {
                                 body.translatedNames(),
 
                                 body.countryRegion(),
+
+                                body.artistType(),
 
                                 body.style(),
 
@@ -216,6 +222,70 @@ public class ArtistController {
                 )
         );
         return ApiResult.success();
+    }
+
+    @GetMapping("/directory")
+    public ApiResult<ArtistDirectoryResult>
+    artistDirectory(
+
+            @RequestParam(
+                    defaultValue = "ALL"
+            )
+            @Pattern(
+                    regexp = "ALL|CN|EU_US|JP|KR|OTHER",
+                    message = "area只能是ALL、CN、EU_US、JP、KR或OTHER"
+            )
+            String area,
+
+            @RequestParam(
+                    defaultValue = "ALL"
+            )
+            @Pattern(
+                    regexp = "ALL|MALE|FEMALE|BAND",
+                    message = "category只能是ALL、MALE、FEMALE或BAND"
+            )
+            String category,
+
+            @RequestParam(
+                    defaultValue = "HOT"
+            )
+            @Pattern(
+                    regexp = "HOT|[A-Z]|#",
+                    message = "initial只能是HOT、A-Z或#"
+            )
+            String initial,
+
+            @RequestParam(
+                    defaultValue = "1"
+            )
+            @Min(
+                    value = 1,
+                    message = "page不能小于1"
+            )
+            int page,
+
+            @RequestParam(
+                    defaultValue = "10"
+            )
+            @Min(
+                    value = 1,
+                    message = "pageSize不能小于1"
+            )
+            @Max(
+                    value = 50,
+                    message = "pageSize不能超过50"
+            )
+            int pageSize
+    ) {
+        return ApiResult.success(
+                musicService.listArtists(
+                        area,
+                        category,
+                        initial,
+                        page,
+                        pageSize
+                )
+        );
     }
 
     @PreAuthorize("""
@@ -339,6 +409,15 @@ public class ArtistController {
                     message = "国家或地区不能超过64个字符"
             )
             String countryRegion,
+
+            @NotBlank(
+                    message = "请选择音乐人类型"
+            )
+            @Pattern(
+                    regexp = "MALE|FEMALE|BAND",
+                    message = "音乐人类型只能是MALE、FEMALE或BAND"
+            )
+            String artistType,
 
             @Size(
                     max = 64,

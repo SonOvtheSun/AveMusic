@@ -18,6 +18,8 @@ import com.avemonica.avemusic.music.api.dto.MusicManagementModels.UpdateArtistRe
 import com.avemonica.avemusic.music.api.dto.MusicManagementModels.UpdateSongRequest;
 import com.avemonica.avemusic.music.api.dto.MusicManagementModels.ReviewRequest;
 import com.avemonica.avemusic.music.api.dto.MusicManagementModels.SongItem;
+import com.avemonica.avemusic.music.api.dto.MusicModels.ArtistDirectoryResult;
+import com.avemonica.avemusic.music.api.dto.MusicModels.SearchResult;
 import com.avemonica.avemusic.music.api.dto.MusicModels.ArtistCard;
 import com.avemonica.avemusic.music.api.dto.MusicModels.SongCard;
 import com.avemonica.avemusic.music.api.dto.MusicManagementModels.PageResult;
@@ -34,6 +36,14 @@ public interface MusicService {
             String keyword,
             int page,
             int size
+    );
+
+    ArtistDirectoryResult listArtists(
+            String area,
+            String category,
+            String initial,
+            int page,
+            int pageSize
     );
 
     PageResult<AlbumItem> pageManagedAlbums(
@@ -150,5 +160,10 @@ public interface MusicService {
 
     void reviewArtist(
             ReviewRequest request
+    );
+
+    SearchResult search(
+            String keyword,
+            int limit
     );
 }

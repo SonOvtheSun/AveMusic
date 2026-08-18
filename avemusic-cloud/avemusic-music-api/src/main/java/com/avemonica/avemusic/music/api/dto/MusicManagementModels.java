@@ -52,6 +52,7 @@ public final class MusicManagementModels {
             List<String> translatedNames,
             String ownerUserId,
             String countryRegion,
+            String artistType,
             String style,
             String avatarUrl,
             String introduction,
@@ -62,6 +63,14 @@ public final class MusicManagementModels {
             String publishStatus,
             String createdAt
     ) implements Serializable {
+        public ArtistItem {
+            translatedNames =
+                    translatedNames == null
+                            ? List.of()
+                            : List.copyOf(
+                            translatedNames
+                    );
+        }
     }
 
     public record ArtistSearchItem(
@@ -87,6 +96,7 @@ public final class MusicManagementModels {
             String name,
             List<String> translatedNames,
             String countryRegion,
+            String artistType,
             String style,
             String introduction,
             String avatarUrl,
@@ -99,6 +109,7 @@ public final class MusicManagementModels {
             String name,
             List<String> translatedNames,
             String countryRegion,
+            String artistType,
             String style,
             String introduction,
             String avatarUrl,

@@ -22,10 +22,13 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @RestController
@@ -53,6 +56,21 @@ public class SongController {
             timeoutMillis = 100_000
     )
     private LyricsService lyricsService;
+
+    @MiniRpcReference(
+            host = "127.0.0.1",
+            port = 20882,
+            group = "music",
+            version = "1.0.0",
+
+            /*
+             * 在线歌词重新匹配可能调用 Qwen，
+             * 不使用默认3秒。
+             */
+            timeoutMillis = 300_000
+    )
+    private LyricsService
+            lyricsManagementService;
 
     private final ManagementActorResolver actorResolver;
     private final PlaySessionService playSessionService;
@@ -93,6 +111,8 @@ public class SongController {
         );
     }
 
+
+
     @GetMapping("/home")
     public ApiResult<List<SongCard>> homeSongs(
             @RequestParam(defaultValue = "8")
@@ -101,6 +121,127 @@ public class SongController {
         return ApiResult.success(
                 musicService.listHomeSongs(limit)
         );
+    }
+
+    @PreAuthorize("""
+        hasAnyAuthority(
+            'sys::admin',
+            'song::manage'
+        )
+        """)
+    @PutMapping(
+            value =
+                    "/{songId}/lyrics/manual",
+
+            consumes =
+                    MediaType
+                            .MULTIPART_FORM_DATA_VALUE
+    )
+    public ApiResult<Void>
+    replaceLyricsManually(
+            @PathVariable
+            String songId,
+
+            @RequestPart("file")
+            MultipartFile file
+    ) throws Exception {
+
+        if (
+                file == null
+                        || file.isEmpty()
+        ) {
+            throw new IllegalArgumentException(
+                    "歌词文件不能为空"
+            );
+        }
+
+
+        /*
+         * 前端已经限制2MB，
+         * 后端仍必须自己校验。
+         */
+        if (
+                file.getSize()
+                        > 2L
+                        * 1024
+                        * 1024
+        ) {
+            throw new IllegalArgumentException(
+                    "歌词文件不能超过2MB"
+            );
+        }
+
+
+        String fileName =
+                file.getOriginalFilename();
+
+        String normalizedFileName =
+                fileName == null
+                        ? ""
+                        : fileName
+                        .toLowerCase(
+                                java.util.Locale.ROOT
+                        );
+
+
+        if (
+                !normalizedFileName
+                        .endsWith(".lrc")
+                        && !normalizedFileName
+                        .endsWith(".txt")
+        ) {
+            throw new IllegalArgumentException(
+                    "仅支持.lrc或.txt歌词文件"
+            );
+        }
+
+
+        /*
+         * 第一版统一要求 UTF-8 歌词文件。
+         */
+        String content =
+                new String(
+                        file.getBytes(),
+                        StandardCharsets.UTF_8
+                );
+
+
+        lyricsManagementService
+                .replaceManualLyrics(
+                        songId,
+                        fileName,
+                        content
+                );
+
+
+        return ApiResult.success();
+    }
+
+    @PreAuthorize("""
+        hasAnyAuthority(
+            'sys::admin',
+            'song::manage'
+        )
+        """)
+    @PutMapping(
+            "/{songId}/lyrics/source"
+    )
+    public ApiResult<Void>
+    replaceLyricsFromSource(
+            @PathVariable
+            String songId,
+
+            @Valid
+            @RequestBody
+            LyricsSourceBody body
+    ) {
+        lyricsManagementService
+                .replaceLyricsFromSource(
+                        songId,
+                        body.source()
+                );
+
+        return ApiResult.success();
     }
 
     /**
@@ -506,6 +647,23 @@ public class SongController {
                     message = "驳回原因不能超过255个字符"
             )
             String reason
+    ) {
+    }
+
+    public record LyricsSourceBody(
+
+            @NotBlank(
+                    message =
+                            "歌词源不能为空"
+            )
+            @Pattern(
+                    regexp =
+                            "^(LRCLIB|NETEASE)$",
+
+                    message =
+                            "歌词源仅支持LRCLIB或NETEASE"
+            )
+            String source
     ) {
     }
 }

@@ -1,4 +1,5 @@
 import { http } from "../auth/api/http";
+import type { UserRole } from "../context/AuthContext";
 
 interface ApiResult<T> {
     code: string;
@@ -14,6 +15,21 @@ export type AuditStatus =
 export type PublishStatus =
     | "ONLINE"
     | "OFFLINE";
+
+export type ArtistType =
+    | "MALE"
+    | "FEMALE"
+    | "BAND"
+    | "UNKNOWN";
+
+export type EditableArtistType =
+    | "MALE"
+    | "FEMALE"
+    | "BAND";
+
+export type LyricsReplaceSource =
+    | "LRCLIB"
+    | "NETEASE";
 
 export interface SongManagementItem {
     id: string;
@@ -47,18 +63,33 @@ export interface AlbumManagementItem {
 
 export interface ArtistManagementItem {
     id: string;
+
     name: string;
+
     translatedNames: string[];
+
     ownerUserId: string | null;
+
     countryRegion: string | null;
+
+    artistType: ArtistType;
+
     style: string | null;
+
     avatarUrl: string | null;
+
     introduction: string | null;
+
     followerCount: number;
+
     songCount: number;
+
     albumCount: number;
+
     auditStatus: AuditStatus;
+
     publishStatus: PublishStatus;
+
     createdAt: string;
 }
 
@@ -83,7 +114,7 @@ export interface UserManagementItem {
     id: string;
     username: string;
     phoneMasked: string | null;
-    role: string;
+    role: UserRole;
     realNameStatus:
         | "NONE"
         | "PENDING"
@@ -118,10 +149,17 @@ export interface UpdateSongRequest {
 
 export interface CreateArtistRequest {
     name: string;
+
     translatedNames: string[];
+
     countryRegion: string;
+
+    artistType: EditableArtistType;
+
     style: string | null;
+
     introduction: string | null;
+
     avatarUrl: string | null;
 }
 
@@ -256,20 +294,52 @@ export async function getManagedAlbums(
 
 export async function getManagedArtists():
     Promise<ArtistManagementItem[]> {
-    const response = await http.get<
-        ApiResult<ArtistManagementItem[]>
-    >("/music/artists/manage");
 
-    return (response.data.data ?? []).map((item) => ({
+    const response =
+        await http.get<
+            ApiResult<
+                ArtistManagementItem[]
+            >
+        >(
+            "/music/artists/manage",
+        );
+
+    return (
+        response.data.data
+        ?? []
+    ).map((item) => ({
+
         ...item,
+
+        translatedNames:
+            item.translatedNames
+            ?? [],
+
+        artistType:
+            item.artistType
+            ?? "UNKNOWN",
+
         followerCount:
-            Number(item.followerCount ?? 0),
+            Number(
+                item.followerCount
+                ?? 0,
+            ),
+
         songCount:
-            Number(item.songCount ?? 0),
+            Number(
+                item.songCount
+                ?? 0,
+            ),
+
         albumCount:
-            Number(item.albumCount ?? 0),
+            Number(
+                item.albumCount
+                ?? 0,
+            ),
+
         publishStatus:
-            item.publishStatus ?? "OFFLINE",
+            item.publishStatus
+            ?? "OFFLINE",
     }));
 }
 
@@ -280,6 +350,16 @@ export async function getManagedUsers():
     >("/users/manage");
 
     return response.data.data ?? [];
+}
+
+export async function updateUserRole(
+    userId: string,
+    role: UserRole,
+): Promise<void> {
+    await http.put<ApiResult<null>>(
+        `/users/${userId}/role`,
+        { role },
+    );
 }
 
 export async function getAuditSongs():
@@ -308,16 +388,42 @@ export async function getAuditArtists():
         ApiResult<ArtistManagementItem[]>
     >("/music/artists/audit");
 
-    return (response.data.data ?? []).map((item) => ({
+    return (
+        response.data.data
+        ?? []
+    ).map((item) => ({
+
         ...item,
+
+        translatedNames:
+            item.translatedNames
+            ?? [],
+
+        artistType:
+            item.artistType
+            ?? "UNKNOWN",
+
         followerCount:
-            Number(item.followerCount ?? 0),
+            Number(
+                item.followerCount
+                ?? 0,
+            ),
+
         songCount:
-            Number(item.songCount ?? 0),
+            Number(
+                item.songCount
+                ?? 0,
+            ),
+
         albumCount:
-            Number(item.albumCount ?? 0),
+            Number(
+                item.albumCount
+                ?? 0,
+            ),
+
         publishStatus:
-            item.publishStatus ?? "OFFLINE",
+            item.publishStatus
+            ?? "OFFLINE",
     }));
 }
 
@@ -569,5 +675,72 @@ export async function reviewArtist(
         `/music/artists/${id}/audit`,
         action,
         reason,
+    );
+}
+
+
+/**
+ * 人工上传歌词文件并覆盖当前歌词。
+ *
+ * 后端约定：
+ * PUT /api/music/songs/{id}/lyrics/manual
+ * multipart/form-data:
+ *   file = .lrc / .txt
+ */
+export async function replaceSongLyricsByFile(
+    id: string,
+    file: File,
+): Promise<void> {
+    const formData =
+        new FormData();
+
+    formData.append(
+        "file",
+        file,
+    );
+
+    await http.put<
+        ApiResult<null>
+    >(
+        `/music/songs/${id}/lyrics/manual`,
+        formData,
+        {
+            /*
+             * 不手工设置 Content-Type，
+             * 让浏览器自动生成 multipart boundary。
+             */
+            timeout: 60_000,
+        },
+    );
+}
+
+
+/**
+ * 强制使用指定歌词源重新匹配并覆盖当前歌词。
+ *
+ * source:
+ * LRCLIB / NETEASE
+ *
+ * 这里的前端语义是：
+ * 只使用用户指定的来源，不自动切换到另一个来源。
+ */
+export async function replaceSongLyricsBySource(
+    id: string,
+    source: LyricsReplaceSource,
+): Promise<void> {
+    await http.put<
+        ApiResult<null>
+    >(
+        `/music/songs/${id}/lyrics/source`,
+        {
+            source,
+        },
+        {
+            /*
+             * 在线重新匹配可能触发候选消歧，
+             * 管理操作留更长超时时间。
+             */
+            timeout: 300_000,
+        },
     );
 }

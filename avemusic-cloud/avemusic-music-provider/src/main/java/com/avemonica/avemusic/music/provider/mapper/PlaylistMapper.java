@@ -68,6 +68,138 @@ public interface PlaylistMapper
     );
 
     @Select("""
+        <script>
+
+        SELECT
+            CAST(p.id AS CHAR)
+                AS id,
+
+            p.name
+                AS name,
+
+            p.introduction
+                AS subtitle,
+
+            COALESCE(
+                p.cover_url,
+
+                (
+                    SELECT
+                        first_song.cover_url
+
+                    FROM playlist_song_tb
+                        first_relation
+
+                    INNER JOIN song_tb
+                        first_song
+
+                        ON first_song.id =
+                           first_relation.song_id
+
+                    WHERE
+                        first_relation.playlist_id =
+                        p.id
+
+                    ORDER BY
+                        first_relation.created_at ASC,
+                        first_relation.id ASC
+
+                    LIMIT 1
+                )
+            ) AS coverUrl,
+
+            NULL
+                AS audioUrl,
+
+            0
+                AS durationSeconds,
+
+            COALESCE(
+                p.favorite_count,
+                0
+            ) AS popularity,
+
+            ''
+                AS artistIds
+
+        FROM playlist_tb p
+
+        WHERE
+            p.visibility = 'PUBLIC'
+
+            AND (
+                <foreach
+                    collection="keywords"
+                    item="keyword"
+                    separator=" OR "
+                >
+
+                    (
+                        p.name LIKE
+                            CONCAT(
+                                '%',
+                                #{keyword},
+                                '%'
+                            )
+
+                        OR p.introduction LIKE
+                            CONCAT(
+                                '%',
+                                #{keyword},
+                                '%'
+                            )
+                    )
+
+                </foreach>
+            )
+
+        ORDER BY
+
+            CASE
+
+                WHEN p.name =
+                        #{originalKeyword}
+                    THEN 0
+
+                WHEN p.name LIKE
+                        CONCAT(
+                            #{originalKeyword},
+                            '%'
+                        )
+                    THEN 1
+
+                WHEN p.name LIKE
+                        CONCAT(
+                            '%',
+                            #{originalKeyword},
+                            '%'
+                        )
+                    THEN 2
+
+                ELSE 3
+
+            END,
+
+            p.favorite_count DESC,
+            p.id DESC
+
+        LIMIT #{limit}
+
+        </script>
+        """)
+    List<Map<String, Object>>
+    searchPublic(
+            @Param("keywords")
+            List<String> keywords,
+
+            @Param("originalKeyword")
+            String originalKeyword,
+
+            @Param("limit")
+            int limit
+    );
+
+    @Select("""
         SELECT
             CAST(
                 p.id AS CHAR

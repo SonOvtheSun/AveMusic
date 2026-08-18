@@ -8,11 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Component
@@ -38,6 +34,10 @@ public final class RedisSessionStore {
 
     private static final String ABSOLUTE_EXPIRES_AT =
             "absoluteExpiresAt";
+
+    private static final String
+            USER_SESSION_PREFIX =
+            "auth:user-sessions:";
 
     private static final DefaultRedisScript<Long>
             ROTATE_REFRESH_SCRIPT =
@@ -147,7 +147,82 @@ public final class RedisSessionStore {
             );
         }
 
+        String userSessionKey =
+                userSessionKey(
+                        user.userId()
+                );
+
+        redisTemplate
+                .opsForSet()
+                .add(
+                        userSessionKey,
+                        sessionId
+                );
+
+        Duration absoluteTtl =
+                Duration.between(
+                        Instant.now(),
+                        absoluteExpiresAt
+                );
+
+        if (
+                !absoluteTtl.isNegative()
+                        && !absoluteTtl.isZero()
+        ) {
+            redisTemplate.expire(
+                    userSessionKey,
+                    absoluteTtl
+            );
+        }
+
         redisTemplate.expire(key, ttl);
+    }
+
+    public void deleteAllByUserId(
+            String userId
+    ) {
+        String indexKey =
+                userSessionKey(
+                        userId
+                );
+
+        Set<String> sessionIds =
+                redisTemplate
+                        .opsForSet()
+                        .members(
+                                indexKey
+                        );
+
+        if (
+                sessionIds != null
+                        && !sessionIds
+                        .isEmpty()
+        ) {
+            List<String> sessionKeys =
+                    sessionIds
+                            .stream()
+                            .map(
+                                    RedisSessionStore
+                                            ::key
+                            )
+                            .toList();
+
+            redisTemplate.delete(
+                    sessionKeys
+            );
+        }
+
+        redisTemplate.delete(
+                indexKey
+        );
+    }
+
+    private static String
+    userSessionKey(
+            String userId
+    ) {
+        return USER_SESSION_PREFIX
+                + userId;
     }
 
     public Optional<SessionData> findAndTouch(
@@ -203,13 +278,13 @@ public final class RedisSessionStore {
         if (!absoluteExpiresAt.isAfter(
                 Instant.now()
         )) {
-            redisTemplate.delete(key);
+            delete(sessionId);
             return Optional.empty();
         }
 
         UserRole role = parseRole(
                 values,
-                key
+                sessionId
         );
 
         if (role == null) {
@@ -288,21 +363,56 @@ public final class RedisSessionStore {
     public void delete(
             String sessionId
     ) {
-        redisTemplate.delete(
-                key(sessionId)
-        );
+        String sessionKey =
+                key(sessionId);
+
+        Object userIdValue =
+                redisTemplate
+                        .opsForHash()
+                        .get(
+                                sessionKey,
+                                USER_ID
+                        );
+
+        redisTemplate.delete(sessionKey);
+
+        if (userIdValue == null) {
+            return;
+        }
+
+        String indexKey =
+                userSessionKey(
+                        userIdValue.toString()
+                );
+
+        redisTemplate
+                .opsForSet()
+                .remove(
+                        indexKey,
+                        sessionId
+                );
+
+        Long remaining =
+                redisTemplate
+                        .opsForSet()
+                        .size(indexKey);
+
+        if (remaining == null
+                || remaining == 0L) {
+            redisTemplate.delete(indexKey);
+        }
     }
 
     private UserRole parseRole(
             Map<Object, Object> values,
-            String redisKey
+            String sessionId
     ) {
         String roleText =
                 value(values, ROLE);
 
         if (roleText == null
                 || roleText.isBlank()) {
-            redisTemplate.delete(redisKey);
+            delete(sessionId);
             return null;
         }
 
@@ -311,7 +421,7 @@ public final class RedisSessionStore {
                     roleText
             );
         } catch (IllegalArgumentException exception) {
-            redisTemplate.delete(redisKey);
+            delete(sessionId);
             return null;
         }
     }
